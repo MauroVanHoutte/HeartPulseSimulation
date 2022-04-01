@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+3rdParty/
+Resources/FibreData/
+Resources/Models/
