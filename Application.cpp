@@ -1,5 +1,7 @@
 #include "Application.h"
 #include "Renderer.h"
+#include "ThreadManager.h"
+#include "BenchMarker.h"
 
 #include <chrono>
 #include <iostream>
@@ -53,6 +55,8 @@ void Application::Run()
 
 	//Cleanup all the resources
 	Cleanup();
+	ThreadManager::GetInstance()->Destroy();
+	Benchmarker::GetInstance()->Destroy();
 }
 
 void Application::QuitApplication()

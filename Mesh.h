@@ -121,6 +121,7 @@ public:
 	void UpdateVertexBuffer(ID3D11DeviceContext* pDeviceContext);
 
 	void UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime);
+	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount, int taskId);
 	void PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 	void PulseVertexV3(VertexInput* vertex, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 
@@ -213,6 +214,10 @@ private:
 	//File Data
 	std::string m_PathName;
 	std::mutex m_Mutex{};
+
+	//Multithreading
+	std::vector<bool> m_TasksFinished{};
+	bool m_UsingThreading = false;
 };
 
 #pragma region OldVersion

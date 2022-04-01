@@ -8,6 +8,8 @@
 #include "Time.h"
 //glm/gtc/epsilon.hpp
 
+#include "ThreadManager.h"
+#include "BenchMarker.h"
 
 //External Headers
 #pragma warning(push)
@@ -43,6 +45,7 @@ Mesh::Mesh()
 	, m_PathName{}
 {
 	LoadPlotData(int(m_DiastolicInterval.count()) + 2);
+	m_TasksFinished.resize(ThreadManager::GetInstance()->GetNrThreads(), false);
 }
 
 Mesh::Mesh(ID3D11Device* pDevice, const std::vector<VertexInput>& vertices, const std::vector<uint32_t>& indices)
@@ -504,66 +507,154 @@ void Mesh::LoadCachedFibres()
 
 void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 {
-	TIME();
-
 	float dist = (m_APMaxValue - m_APMinValue);
 	float deltaTimeInMs = deltaTime * 1000.f;
 
-	for (VertexInput& vertex : m_VertexBuffer)
+	auto startTime = std::chrono::high_resolution_clock::now();
+
+	if (m_UsingThreading)
 	{
-		switch (vertex.state)
+		int nrThreads = int(ThreadManager::GetInstance()->GetNrThreads());
+		int jobSize = int(ceil(m_VertexBuffer.size() / float(nrThreads)));
+
+		int firstVertex = 0;
+
+		for (int i = 0; i < nrThreads; i++)
+		{
+			ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, firstVertex, jobSize, i));
+			firstVertex += int(jobSize);
+		}
+
+		while (!std::all_of(m_TasksFinished.begin(), m_TasksFinished.end(), [](bool curr) {return curr; }))
+		{
+			std::this_thread::sleep_for(std::chrono::microseconds(5));
+		}
+	}
+	else
+	{ 
+		for (VertexInput& vertex : m_VertexBuffer)
+		{
+			switch (vertex.state)
+			{
+			case State::APD:
+			{
+				vertex.timePassed += deltaTimeInMs;
+
+				int idx = int(vertex.timePassed);
+
+				if (!m_APPlot.empty() && idx > 0 && idx < m_APPlot.size() && (size_t(idx) + size_t(1)) < m_APPlot.size())
+				{
+					float value1 = m_APPlot[idx];
+					float value2 = m_APPlot[(size_t(idx) + size_t(1))];
+					float t = vertex.timePassed - idx;
+
+					float lerpedValue = value1 + t * (value2 - value1);
+
+					float valueRange01 = (lerpedValue - m_APMinValue) / dist;
+
+					vertex.actionPotential = lerpedValue;
+					vertex.apVisualization = valueRange01;
+				}
+
+				if (vertex.timePassed >= m_APD)
+				{
+					vertex.timePassed = 0.f;
+					vertex.state = State::DI;
+					vertex.apVisualization = 0.f;
+				}
+
+				break;
+			}
+			case State::DI:
+				vertex.timePassed += deltaTimeInMs;
+
+				if (vertex.timePassed >= m_DiastolicInterval.count())
+				{
+					vertex.timePassed = 0.f;
+					vertex.state = State::Waiting;
+				}
+				break;
+
+			case State::Receiving:
+				vertex.timeToTravel -= deltaTime;
+				if (vertex.timeToTravel <= 0.f)
+				{
+					vertex.state = State::Waiting;
+					PulseVertexV3(&vertex, pDeviceContext, false);
+				}
+				break;
+			}
+		}
+	}
+
+	Benchmarker::GetInstance()->AddDuration(std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startTime).count());
+
+	UpdateVertexBuffer(pDeviceContext);
+}
+
+void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount, int taskId)
+{
+	TIME();
+	for (size_t i = firstVertex; i < firstVertex+vertexCount; i++)
+	{
+		if (i == m_VertexBuffer.size())
+		{
+			break;
+		}
+
+		switch (m_VertexBuffer[i].state)
 		{
 		case State::APD:
 		{
-			vertex.timePassed += deltaTimeInMs;
+			m_VertexBuffer[i].timePassed += deltaTimeInMs;
 
-			int idx = int(vertex.timePassed);
+			int idx = int(m_VertexBuffer[i].timePassed);
 
 			if (!m_APPlot.empty() && idx > 0 && idx < m_APPlot.size() && (size_t(idx) + size_t(1)) < m_APPlot.size())
 			{
 				float value1 = m_APPlot[idx];
 				float value2 = m_APPlot[(size_t(idx) + size_t(1))];
-				float t = vertex.timePassed - idx;
+				float t = m_VertexBuffer[i].timePassed - idx;
 
 				float lerpedValue = value1 + t * (value2 - value1);
 
 				float valueRange01 = (lerpedValue - m_APMinValue) / dist;
 
-				vertex.actionPotential = lerpedValue;
-				vertex.apVisualization = valueRange01;
+				m_VertexBuffer[i].actionPotential = lerpedValue;
+				m_VertexBuffer[i].apVisualization = valueRange01;
 			}
 
-			if (vertex.timePassed >= m_APD)
+			if (m_VertexBuffer[i].timePassed >= m_APD)
 			{
-				vertex.timePassed = 0.f;
-				vertex.state = State::DI;
-				vertex.apVisualization = 0.f;
+				m_VertexBuffer[i].timePassed = 0.f;
+				m_VertexBuffer[i].state = State::DI;
+				m_VertexBuffer[i].apVisualization = 0.f;
 			}
 
 			break;
 		}
 		case State::DI:
-			vertex.timePassed += deltaTimeInMs;
+			m_VertexBuffer[i].timePassed += deltaTimeInMs;
 
-			if (vertex.timePassed >= m_DiastolicInterval.count())
+			if (m_VertexBuffer[i].timePassed >= m_DiastolicInterval.count())
 			{
-				vertex.timePassed = 0.f;
-				vertex.state = State::Waiting;
+				m_VertexBuffer[i].timePassed = 0.f;
+				m_VertexBuffer[i].state = State::Waiting;
 			}
 			break;
 
 		case State::Receiving:
-			vertex.timeToTravel -= deltaTime;
-			if (vertex.timeToTravel <= 0.f)
+			m_VertexBuffer[i].timeToTravel -= deltaTime;
+			if (m_VertexBuffer[i].timeToTravel <= 0.f)
 			{
-				vertex.state = State::Waiting;
-				PulseVertexV3(&vertex, pDeviceContext, false);
+				m_VertexBuffer[i].state = State::Waiting;
+				PulseVertexV3(&m_VertexBuffer[i], pDeviceContext, false);
 			}
 			break;
 		}
 	}
 
-	UpdateVertexBuffer(pDeviceContext);
+	m_TasksFinished[taskId] = true;
 }
 
 void Mesh::PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer)

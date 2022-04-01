@@ -176,6 +176,7 @@
     <ClCompile Include="3rdParty\imgui-1.81\imgui_widgets.cpp" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="BaseEffect.cpp" />
+    <ClCompile Include="BenchMarker.cpp" />
     <ClCompile Include="Cell.cpp" />
     <ClCompile Include="DirectXApplication.cpp" />
     <ClCompile Include="DirectXRenderer.cpp" />
@@ -186,6 +187,7 @@
     <ClCompile Include="OpenGLRenderer.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="SDL2Renderer.cpp" />
+    <ClCompile Include="ThreadManager.cpp" />
     <ClCompile Include="Time.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -199,6 +201,7 @@
     <ClInclude Include="3rdParty\imgui-1.81\imstb_truetype.h" />
     <ClInclude Include="Application.h" />
     <ClInclude Include="BaseEffect.h" />
+    <ClInclude Include="BenchMarker.h" />
     <ClInclude Include="Cell.h" />
     <ClInclude Include="DirectXApplication.h" />
     <ClInclude Include="DirectXRenderer.h" />
@@ -209,6 +212,7 @@
     <ClInclude Include="OpenGLRenderer.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="SDL2Renderer.h" />
+    <ClInclude Include="ThreadManager.h" />
     <ClInclude Include="Time.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
