@@ -57,7 +57,10 @@ Mesh::Mesh(ID3D11Device* pDevice, const std::string& filepath, bool skipOptimiza
 {
 	m_PathName = filepath;
 	m_SkipOptimization = skipOptimization;
-	CreateEffect(pDevice);
+	{
+		std::lock_guard<std::mutex> lock(m_Mutex);
+		CreateEffect(pDevice);
+	}
 
 	switch (fileType)
 	{
@@ -76,7 +79,10 @@ Mesh::Mesh(ID3D11Device* pDevice, const std::string& filepath, bool skipOptimiza
 	default: ;
 	}
 
-	CreateDirectXResources(pDevice, m_VertexBuffer, m_IndexBuffer);
+	{
+		std::lock_guard<std::mutex> lock(m_Mutex);
+		CreateDirectXResources(pDevice, m_VertexBuffer, m_IndexBuffer);
+	}
 }
 
 Mesh::~Mesh()

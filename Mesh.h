@@ -6,6 +6,7 @@
 #include <map>
 #include <vector>
 #include <chrono>
+#include <mutex>
 
 #pragma warning(push)
 #pragma warning(disable:4616)
@@ -211,6 +212,7 @@ private:
 
 	//File Data
 	std::string m_PathName;
+	std::mutex m_Mutex{};
 };
 
 #pragma region OldVersion

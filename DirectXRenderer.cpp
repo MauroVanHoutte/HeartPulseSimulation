@@ -254,6 +254,7 @@ void DirectXRenderer::CreateMesh(const std::string& filePath, FileType fileType,
             m_LoadingMesh = false;
         }
     };
+
     m_CreationThreads.push_back(std::move(creationThread));
 }
 

@@ -34,4 +34,6 @@
 3rdParty/
 Resources/FibreData/
 Resources/Models/
+Resources/Output/
+x64/
 .vs/
