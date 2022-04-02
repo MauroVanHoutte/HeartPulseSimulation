@@ -143,6 +143,12 @@ public:
 	float GetAPD() const;
 	void UseFibres(bool useFibres);
 	bool UseFibres();
+	void UseThreading(bool useThreading);
+	bool UsingThreading();
+	void ConstantPulsing(bool constantPulsing);
+	bool IsPulsing();
+	void SetPulseRate(float pulseRate);
+	float GetPulseRate();
 
 	void SetVertexBuffer(ID3D11DeviceContext* pDeviceContext, const std::vector<VertexInput>& vertexBuffer);
 	void SetWireframe(bool enabled);
@@ -217,7 +223,12 @@ private:
 
 	//Multithreading
 	std::vector<bool> m_TasksFinished{};
-	bool m_UsingThreading = false;
+	bool m_UsingThreading = true;
+
+	//Constant pulsing
+	float m_PulseRate = 0.f; // in Hz
+	float m_PulseCounter = 0.f;
+	bool m_IsPulsing = false;
 };
 
 #pragma region OldVersion

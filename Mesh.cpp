@@ -262,6 +262,38 @@ bool Mesh::UseFibres()
 	return m_FibresLoaded && m_UseFibres;
 }
 
+void Mesh::UseThreading(bool useThreading)
+{
+	m_UsingThreading = useThreading;
+}
+
+bool Mesh::UsingThreading()
+{
+	return m_UsingThreading;
+}
+
+void Mesh::ConstantPulsing(bool constantPulsing)
+{
+	if (constantPulsing != m_IsPulsing)
+		m_PulseCounter = 0.f;
+	m_IsPulsing = constantPulsing;
+}
+
+bool Mesh::IsPulsing()
+{
+	return m_IsPulsing;
+}
+
+void Mesh::SetPulseRate(float pulseRate)
+{
+	m_PulseRate = pulseRate;
+}
+
+float Mesh::GetPulseRate()
+{
+	return m_PulseRate;
+}
+
 void Mesh::CreateCachedBinary()
 {
 	std::cout << "\n[Started Writing File To Binary]\n";
@@ -507,6 +539,16 @@ void Mesh::LoadCachedFibres()
 
 void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 {
+	if (m_IsPulsing)
+	{
+		m_PulseCounter += deltaTime;
+		if (m_PulseCounter > 1/m_PulseRate)
+		{
+			m_PulseCounter -= 1 / m_PulseRate;
+			PulseVertexV3(uint32_t(0), pDeviceContext);
+		}
+	}
+
 	float dist = (m_APMaxValue - m_APMinValue);
 	float deltaTimeInMs = deltaTime * 1000.f;
 

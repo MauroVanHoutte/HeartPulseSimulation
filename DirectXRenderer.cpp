@@ -814,6 +814,11 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
 		{
             pMesh->UseFibres(useFibres);
 		}
+        bool useMultithreading = pMesh->UsingThreading();
+        if (ImGui::Checkbox("Use Multithreading", &useMultithreading))
+        {
+            pMesh->UseThreading(useMultithreading);
+        }
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -850,6 +855,18 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         if (ImGui::Button("Pulse Mesh"))
         {
             pMesh->PulseMesh(m_pDeviceContext);
+        }
+
+        bool pulsing = pMesh->IsPulsing();
+        if (ImGui::Checkbox("Constant Pulsing", &pulsing))
+        {
+            pMesh->ConstantPulsing(pulsing);
+        }
+        float pulseRate = pMesh->GetPulseRate();
+        ImGui::InputFloat("Pulse Rate (Hz)", &pulseRate);
+        if (pulseRate != pMesh->GetPulseRate())
+        {
+            pMesh->SetPulseRate(pulseRate);
         }
 
         ImGui::Spacing();
