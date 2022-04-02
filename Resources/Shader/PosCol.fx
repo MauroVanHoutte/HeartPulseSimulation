@@ -119,7 +119,7 @@ float4 PS(VS_OUTPUT input) : SV_TARGET
     float g = (color2.g - color1.g) * input.Power + color1.g;
     float b = (color2.b - color1.b) * input.Power + color1.b;
     
-    return float4(r, g, b, 1) * lambert;
+    return float4(r, g, b, 1) * (lambert + 0.2f); //0.2f ambient light
 }
 
 //-----------------------------
