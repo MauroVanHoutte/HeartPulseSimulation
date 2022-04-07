@@ -149,6 +149,8 @@ public:
 	bool IsPulsing();
 	void SetPulseRate(float pulseRate);
 	float GetPulseRate();
+	void StartBenchmarking(const std::string& name);
+	void StopBenchmarking();
 
 	void SetVertexBuffer(ID3D11DeviceContext* pDeviceContext, const std::vector<VertexInput>& vertexBuffer);
 	void SetWireframe(bool enabled);
@@ -229,6 +231,7 @@ private:
 	float m_PulseRate = 0.f; // in Hz
 	float m_PulseCounter = 0.f;
 	bool m_IsPulsing = false;
+	bool volatile m_Benchmarking = false; //gets optimized away if not volatile
 };
 
 #pragma region OldVersion

@@ -96,6 +96,8 @@ private:
 	bool m_LoadAsVolumeMesh = false;
 	glm::fvec3 m_CameraPosition;
 
+	std::string m_BenchmarkName{};
+
 	//Test
 	bool m_RunningTest = false;
 	int m_NrOfPules = 0;

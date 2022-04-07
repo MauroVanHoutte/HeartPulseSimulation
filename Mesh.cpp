@@ -294,6 +294,18 @@ float Mesh::GetPulseRate()
 	return m_PulseRate;
 }
 
+void Mesh::StartBenchmarking(const std::string& name)
+{
+	m_Benchmarking = true;
+	Benchmarker::GetInstance()->StartBenchmark(m_PulseRate, name);
+}
+
+void Mesh::StopBenchmarking()
+{
+	m_Benchmarking = false;
+	Benchmarker::GetInstance()->EndBenchmark();
+}
+
 void Mesh::CreateCachedBinary()
 {
 	std::cout << "\n[Started Writing File To Binary]\n";
@@ -629,7 +641,8 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 		}
 	}
 
-	Benchmarker::GetInstance()->AddDuration(std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startTime).count());
+	if(m_Benchmarking)
+		Benchmarker::GetInstance()->AddDuration(std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startTime).count());
 
 	UpdateVertexBuffer(pDeviceContext);
 }

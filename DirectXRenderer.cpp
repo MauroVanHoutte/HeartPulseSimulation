@@ -10,6 +10,8 @@
 #include "SDL_syswm.h"
 #include "SDL_surface.h"
 
+#include "imgui_stdlib.h"
+
 #pragma warning(push)
 #pragma warning(disable:4616)
 #pragma warning(disable:4201)
@@ -34,6 +36,7 @@ DirectXRenderer::DirectXRenderer(HINSTANCE hInstance, const std::string& windowN
 	, m_Mutex{}
 {
     m_Instance = hInstance;
+    m_BenchmarkName.reserve(256);
 }
 
 bool DirectXRenderer::Initialize()
@@ -855,6 +858,18 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         if (ImGui::Button("Pulse Mesh"))
         {
             pMesh->PulseMesh(m_pDeviceContext);
+        }
+
+        ImGui::InputText("BenchmarkName", &m_BenchmarkName);
+
+        if (ImGui::Button("StartBenchmarking"))
+        {
+            pMesh->StartBenchmarking(m_BenchmarkName);
+        }
+
+        if (ImGui::Button("StopBenchmarking"))
+        {
+            pMesh->StopBenchmarking();
         }
 
         bool pulsing = pMesh->IsPulsing();
