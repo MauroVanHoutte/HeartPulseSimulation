@@ -55,6 +55,8 @@ public:
 	bool IsRunningTest();
 	void IncreasePulses();
 
+	void ToggleImguiUi();
+
 private:
 	//----- Handle -----
 	HRESULT CreateHandle();
@@ -88,6 +90,7 @@ private:
 	//------ IMGUI ------
 	bool InitializeImGui();
 	void RenderImGui();
+	bool m_ShowUI = true;
 
 	static const int m_Size = 128;
 	char* m_Buffer = new char[m_Size]{};

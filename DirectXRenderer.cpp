@@ -232,6 +232,11 @@ void DirectXRenderer::IncreasePulses()
     }
 }
 
+void DirectXRenderer::ToggleImguiUi()
+{
+    m_ShowUI = !m_ShowUI;
+}
+
 
 const std::vector<Mesh*>& DirectXRenderer::GetMeshes() const
 {
@@ -242,23 +247,20 @@ void DirectXRenderer::CreateMesh(const std::string& filePath, FileType fileType,
 {
     Mesh* mesh = nullptr;
     m_LoadingMesh = true;
-    std::thread creationThread{ [this, &mesh, filePath, fileType, useFibres]()
-        {
-            TIME();
-            mesh = new Mesh(m_pDevice, filePath, false, fileType);
-            mesh->UseFibres(useFibres);
-            if (!mesh->GetVertexBuffer().empty())
-            {
-                glm::fvec3 pos = mesh->GetVertexBuffer()[0].position;
-                m_pCamera->Translate(pos);
-            }
 
-            AddMesh(mesh);
-            m_LoadingMesh = false;
-        }
-    };
+    TIME();
+    mesh = new Mesh(m_pDevice, filePath, false, fileType, 8);
+    mesh->UseFibres(useFibres);
+    if (!mesh->GetVertexBuffer().empty())
+    {
+        glm::fvec3 pos = mesh->GetVertexBuffer()[0].position;
+        m_pCamera->Translate(pos);
+    }
 
-    m_CreationThreads.push_back(std::move(creationThread));
+    AddMesh(mesh);
+    m_LoadingMesh = false;
+
+
 }
 
 void DirectXRenderer::AddMesh(Mesh* pMesh)
@@ -535,12 +537,12 @@ bool DirectXRenderer::InitializeImGui()
 
 void DirectXRenderer::RenderImGui()
 {
+    if (!m_ShowUI)
+        return;
+
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplSDL2_NewFrame(m_pWindow);
     ImGui::NewFrame();
-
-    //bool openDemo{ true };
-    //ImGui::ShowDemoWindow(&openDemo);
 
     ImGui::Begin("Data");
 
@@ -1005,6 +1007,10 @@ void DirectXRenderer::ImGuiDrawMeshLoadingHeader()
     }
     ImGui::Spacing();
     ImGui::Spacing();
+    if (ImGui::Button("Load VTK"))
+    {
+        CreateMesh("Resources/Models/" + std::string{ m_Buffer }, FileType::VTK);
+    }
     ImGui::Spacing();
     ImGui::Spacing();
     ImGui::Spacing();
