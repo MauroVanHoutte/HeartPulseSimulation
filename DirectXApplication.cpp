@@ -97,6 +97,11 @@ void DirectXApplication::HandleInput()
         {
             ImGui_ImplSDL2_ProcessEvent(&e);
         }
+        if (e.type == SDL_KEYDOWN)
+        {
+            if (e.key.keysym.scancode == SDL_SCANCODE_U)
+                m_pDirectXRenderer->ToggleImguiUi();
+        }
 
         if (e.type == SDL_QUIT)
             DirectXApplication::QuitApplication();
