@@ -11,6 +11,8 @@
 #pragma warning(push)
 #pragma warning(disable:4616)
 #pragma warning(disable:4201)
+#define GLM_ENABLE_EXPERIMENTAL
+#include "3rdParty/glm/gtx/hash.hpp"
 #include <gtc/type_ptr.hpp>
 #pragma warning(pop)
 
@@ -105,6 +107,13 @@ struct VertexInput
 		return rhs.position == lhs.position;
 	}
 };
+namespace std {
+	template<> struct hash<VertexInput> {
+		size_t operator()(VertexInput const& vertex) const {
+			return (hash<glm::vec3>()(vertex.position));
+		}
+	};
+}
 
 class Mesh
 {
@@ -189,6 +198,7 @@ private:
 	void CalculateTangents();						//Should be put in an AssetLoader Class
 	void OptimizeIndexBuffer();						//Should be put in an AssetLoader Class
 	void OptimizeVertexBuffer();					//Should be put in an AssetLoader Class
+	void OptimizeVertexAndIndexBuffer();
 
 	bool m_SkipOptimization;						//Should be put in an AssetLoader Class
 
@@ -225,13 +235,13 @@ private:
 
 	//Multithreading
 	std::vector<bool> m_TasksFinished{};
-	bool m_UsingThreading = true;
+	bool m_UsingThreading = false;
 
 	//Constant pulsing
-	float m_PulseRate = 0.f; // in Hz
+	float m_PulseRate = 1.5f; // in Hz
 	float m_PulseCounter = 0.f;
-	bool m_IsPulsing = false;
-	bool volatile m_Benchmarking = false; //gets optimized away if not volatile
+	bool m_IsPulsing = true;
+	bool m_Benchmarking = false; 
 };
 
 #pragma region OldVersion

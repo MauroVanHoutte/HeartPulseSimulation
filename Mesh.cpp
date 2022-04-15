@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "Time.h"
+#include <unordered_map>
 //glm/gtc/epsilon.hpp
 
 #include "ThreadManager.h"
@@ -15,7 +16,11 @@
 #pragma warning(push)
 #pragma warning(disable:4244)
 #pragma warning(disable:4701)
+#pragma warning(disable:4003)
 //#define OBJL_CONSOLE_OUTPUT
+#undef min
+#undef max
+#include "3rdParty/glm/gtx/norm.hpp"
 #include "OBJ_Loader.h"
 #undef OBJL_CONSOLE_OUTPUT
 #pragma warning(pop)
@@ -623,7 +628,7 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 				vertex.timePassed += deltaTimeInMs;
 
 				if (vertex.timePassed >= m_DiastolicInterval.count())
-				{
+					{
 					vertex.timePassed = 0.f;
 					vertex.state = State::Waiting;
 				}
@@ -732,29 +737,32 @@ void Mesh::PulseVertexV3(VertexInput* vertex, ID3D11DeviceContext* pDeviceContex
 			for (uint32_t index : vertex->neighbourIndices)
 			{
 				VertexInput& neighbourVertex = m_VertexBuffer[index];
-				if (neighbourVertex.state == State::Waiting)
-				{
-					//Potential problem with fibres. c0 is in m/s while the distance is most likely not in meters.
+
+				//Potential problem with fibres. c0 is in m/s while the distance is most likely not in meters.
 					//This is likely the cause of it.
-					float distance = glm::distance(vertex->position, neighbourVertex.position);
-					float conductionVelocity = m_ConductionVelocity;
+				float distance = glm::distance(vertex->position, neighbourVertex.position);
+				float conductionVelocity = m_ConductionVelocity;
 
-					if (UseFibres())
-					{
-						float d1 = 1; // parallel with fibre
-						float d2 = d1 / 5; // perpendiculat with fibre
-						float c0 = 0.6f; // m/s
+				if (UseFibres())
+				{
+					float d1 = 1; // parallel with fibre
+					float d2 = d1 / 5; // perpendiculat with fibre
+					float c0 = 0.6f; // m/s
 
-						glm::fvec3 pulseDirection = glm::normalize(neighbourVertex.position - vertex->position);
-						float cosAngle = glm::dot(vertex->fibreDirection, pulseDirection);
+					glm::fvec3 pulseDirection = glm::normalize(neighbourVertex.position - vertex->position);
+					float cosAngle = glm::dot(vertex->fibreDirection, pulseDirection);
 
-						float c = c0 * sqrtf(d2 + (d1 - d2) * powf(cosAngle, 2));
-						conductionVelocity = c*100;
-						//std::cout << c << "\n";
-					}
+					float c = c0 * sqrtf(d2 + (d1 - d2) * powf(cosAngle, 2));
+					conductionVelocity = c * 100;
+					//std::cout << c << "\n";
+				}
 
-					neighbourVertex.timeToTravel = distance / conductionVelocity;
-					//neighbourVertex.timeToTravel = conductionVelocity;
+				float travelTime = distance / conductionVelocity;
+				float timeToRecover = m_DiastolicInterval.count() - neighbourVertex.timePassed;
+
+				if (neighbourVertex.state == State::Waiting || (neighbourVertex.state == State::DI && timeToRecover < travelTime))
+				{
+					neighbourVertex.timeToTravel = travelTime;
 					neighbourVertex.state = State::Receiving;
 				}
 			}
@@ -886,7 +894,7 @@ HRESULT Mesh::CreateDirectXResources(ID3D11Device* pDevice, const std::vector<Ve
 	//Create solid rasterizer state
 	D3D11_RASTERIZER_DESC rss{};
 	rss.FillMode = D3D11_FILL_SOLID;
-	rss.CullMode = D3D11_CULL_BACK;
+	rss.CullMode = D3D11_CULL_NONE;
 	rss.FrontCounterClockwise = true;
 	result = pDevice->CreateRasterizerState(&rss, &m_pRasterizerStateSolid);
 	if (FAILED(result))
@@ -895,7 +903,7 @@ HRESULT Mesh::CreateDirectXResources(ID3D11Device* pDevice, const std::vector<Ve
 	return result;
 }
 
-void Mesh::LoadMeshFromOBJ(uint32_t nrOfThreads)
+void Mesh::LoadMeshFromOBJ(uint32_t )
 {
 	TIME();
 	auto timeStart = std::chrono::high_resolution_clock::now();
@@ -940,28 +948,29 @@ void Mesh::LoadMeshFromOBJ(uint32_t nrOfThreads)
 			LoadCachedFibres();
 
 			//Remove indices pointing towards duplicate vertices
-			if (!m_SkipOptimization)
-				OptimizeIndexBuffer();
+			/*if (!m_SkipOptimization)
+				OptimizeIndexBuffer();*/
+
+			OptimizeVertexAndIndexBuffer();
 
 			CalculateTangents();
 
 			//Remove the duplicate vertices from the vertex buffer
-			if (!m_SkipOptimization)
-			{
-				std::cout << "\n--- Started Optimizing Vertex Buffer ---\n";
-				OptimizeVertexBuffer();
-				std::cout << "--- Finished Optimizing Vertex Buffer ---\n";
-			}
+			//if (!m_SkipOptimization)
+			//{
+			//	std::cout << "\n--- Started Optimizing Vertex Buffer ---\n";
+			//	OptimizeVertexBuffer();
+			//	std::cout << "--- Finished Optimizing Vertex Buffer ---\n";
+			//}
 
 			//Get the neighbour of every vertex
-			if (!m_SkipOptimization)
-			{
-				std::cout << "\n--- Started Calculating Vertex Neighbours ---\n";
-				CalculateNeighbours(nrOfThreads);
-				std::cout << "--- Finished Calculating Vertex Neighbours ---\n";
-			}
+		
+			std::cout << "\n--- Started Calculating Vertex Neighbours ---\n";
+			CalculateNeighbours(1);
+			std::cout << "--- Finished Calculating Vertex Neighbours ---\n";
+			
 
-			CalculateInnerNeighbours();
+			//CalculateInnerNeighbours();
 
 			std::cout << "\n" << m_VertexBuffer.size() << " Vertices After Optimization\n";
 
@@ -987,7 +996,7 @@ void Mesh::LoadMeshFromVTK()
 	std::map<uint32_t, uint32_t> indicesToReplace{};
 
 	std::string ptsFilePath = path + ".pts";
-	std::ifstream vertexStream{ ptsFilePath };
+	std::ifstream vertexStream{ m_PathName };
 	if (vertexStream.is_open())
 	{
 		std::string line{};
@@ -1340,13 +1349,34 @@ void Mesh::OptimizeVertexBuffer()
 	// [1] [2] [3] [4]	   [5]     [6] [7] //All vertices with original index > 6, decrement
 }
 
+void Mesh::OptimizeVertexAndIndexBuffer()
+{
+	std::unordered_map<VertexInput, uint32_t> VerticesMap{};
+	std::vector<uint32_t> uniqueIndices{};
+	std::vector<VertexInput> uniqueVertices{};
+
+	for (const auto& vertex : m_VertexBuffer)
+	{
+		if (VerticesMap.count(vertex) == 0)
+		{
+			VerticesMap[vertex] = uint32_t(uniqueVertices.size());
+			uniqueVertices.push_back(vertex);
+		}
+
+		uniqueIndices.push_back(VerticesMap[vertex]);
+	}
+
+	m_VertexBuffer = uniqueVertices;
+	m_IndexBuffer = uniqueIndices;
+}
+
 void Mesh::CalculateNeighbours(int nrOfThreads)
 {
 	auto GetNeighboursInRange = [this](uint32_t start, uint32_t end)
 	{
-		for (uint32_t i{ start }; i < end; i++)
+		for (uint32_t i{ start }; i < end; i += 3)
 		{
-			std::vector<uint32_t>::iterator it = std::find(m_IndexBuffer.begin() + start, m_IndexBuffer.begin() + end, i);
+			/*std::vector<uint32_t>::iterator it = std::find(m_IndexBuffer.begin() + start, m_IndexBuffer.begin() + end, i);
 			while (it != m_IndexBuffer.end() && it < m_IndexBuffer.begin() + end)
 			{
 				uint32_t index = uint32_t(it - m_IndexBuffer.begin());
@@ -1375,7 +1405,16 @@ void Mesh::CalculateNeighbours(int nrOfThreads)
 
 				it++;
 				it = std::find(it, (m_IndexBuffer.begin() + end), i);
-			}
+			}*/
+
+			auto idx1 = m_IndexBuffer[i];
+			auto idx2 = m_IndexBuffer[i + 1];
+			auto idx3 = m_IndexBuffer[i + 2];
+
+			m_VertexBuffer[idx1].neighbourIndices.insert({ idx2, idx3 });
+			m_VertexBuffer[idx2].neighbourIndices.insert({ idx1, idx3 });
+			m_VertexBuffer[idx3].neighbourIndices.insert({ idx2, idx1 });
+
 		}
 	};
 
@@ -1418,7 +1457,7 @@ void Mesh::CalculateInnerNeighbours()
 	std::cout << "\n[Started Calculating Inner Neighbours]\n";
 	TimePoint start = std::chrono::high_resolution_clock::now();
 	float margin = -0.8f;
-	float maxDistance = 5.f;
+	float maxDistance = 20.f;
 
 	for (int i{}; i < m_VertexBuffer.size(); i++)
 	{
@@ -1434,6 +1473,8 @@ void Mesh::CalculateInnerNeighbours()
 		while (it != m_VertexBuffer.end())
 		{
 			VertexInput& vertex2 = *it;
+
+
 			float dot = glm::dot(vertex1.normal, vertex2.normal);
 			if (dot <= margin)
 			{
