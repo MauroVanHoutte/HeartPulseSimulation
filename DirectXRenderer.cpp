@@ -819,11 +819,37 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
 		{
             pMesh->UseFibres(useFibres);
 		}
-        bool useMultithreading = pMesh->UsingThreading();
-        if (ImGui::Checkbox("Use Multithreading", &useMultithreading))
+        
+        const char* items[] = { "Serial", "Multithreaded", "GPU" };
+        static const char* selectedItem = items[0];
+
+        if (ImGui::BeginCombo("UpdateSystem", selectedItem))
         {
-            pMesh->UseThreading(useMultithreading);
+            for (size_t i = 0; i < IM_ARRAYSIZE(items); i++)
+            {
+                bool isSelected = (selectedItem == items[i]);
+                if (ImGui::Selectable(items[i], isSelected))
+                {
+                    selectedItem = items[i];
+                    switch (i)
+                    {
+                    case 0:
+                        pMesh->SetUpdateSystem(UpdateSystem::Serial);
+                        break;
+                    case 1:
+                        pMesh->SetUpdateSystem(UpdateSystem::Multithreaded);
+                        break;
+                    case 2:
+                        pMesh->SetUpdateSystem(UpdateSystem::GPU);
+                        break;
+                    }
+                }
+                if (isSelected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
         }
+
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -843,10 +869,10 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         std::string state{};
         switch (vertexBuffer[m_Index].state)
         {
-        case State::Waiting: state = "Waiting"; break;
-        case State::Receiving: state = "Receiving"; break;
-        case State::APD: state = "Action Potential"; break;
-        case State::DI: state = "Diastolic Interval"; break;
+        case VertexInput::State::Waiting: state = "Waiting"; break;
+        case VertexInput::State::Receiving: state = "Receiving"; break;
+        case VertexInput::State::APD: state = "Action Potential"; break;
+        case VertexInput::State::DI: state = "Diastolic Interval"; break;
         }
         ImGui::Text(state.c_str());
 

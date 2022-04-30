@@ -69,9 +69,6 @@
     <ClCompile Include="BaseEffect.cpp">
       <Filter>DirectX</Filter>
     </ClCompile>
-    <ClCompile Include="Mesh.cpp">
-      <Filter>DirectX</Filter>
-    </ClCompile>
     <ClCompile Include="3rdParty\imgui-1.81\imgui_draw.cpp">
       <Filter>3rdParty\ImGui</Filter>
     </ClCompile>
@@ -105,6 +102,9 @@
     <ClCompile Include="3rdParty\imgui-1.81\imgui_stdlib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Mesh.cpp">
+      <Filter>DirectX</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Cell.h">
@@ -135,9 +135,6 @@
       <Filter>Renderer</Filter>
     </ClInclude>
     <ClInclude Include="BaseEffect.h">
-      <Filter>DirectX</Filter>
-    </ClInclude>
-    <ClInclude Include="Mesh.h">
       <Filter>DirectX</Filter>
     </ClInclude>
     <ClInclude Include="3rdParty\imgui-1.81\imgui_internal.h">
@@ -179,5 +176,17 @@
     <ClInclude Include="3rdParty\imgui-1.81\imgui_stdlib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Mesh.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="VertexInput.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="GpuUpdate.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="GpuUpdate.cu" />
   </ItemGroup>
 </Project>

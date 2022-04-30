@@ -118,7 +118,7 @@ void DirectXApplication::Update(float deltaTime)
         if (pMesh)
         {
             VertexInput& vertex = pMesh->GetVertexBufferReference()[0];
-            if (vertex.state == State::Waiting)
+            if (vertex.state == VertexInput::State::Waiting)
             {
                 pMesh->PulseVertexV3(&vertex, m_pDirectXRenderer->GetDeviceContext(), false);
                 m_pDirectXRenderer->IncreasePulses();
