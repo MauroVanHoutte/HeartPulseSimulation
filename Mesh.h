@@ -10,6 +10,7 @@
 
 #include "VertexInput.h"
 #include "GpuUpdate.h"
+#include <future>
 
 #pragma warning(push)
 #pragma warning(disable:4616)
@@ -63,7 +64,7 @@ public:
 	void UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
 	void UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
 	void SetUpdateSystem(UpdateSystem system);
-	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount, int taskId);
+	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount);
 	void PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 	void PulseVertexV3(VertexInput* vertex, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 
@@ -167,7 +168,7 @@ private:
 	std::mutex m_Mutex{};
 
 	//Multithreading
-	std::vector<bool> m_TasksFinished{};
+	std::vector<std::future<void>> m_TasksFinished{};
 	CudaUpdate m_CudaUpdate{};
 	UpdateSystem m_UpdateSystem = UpdateSystem::Serial;
 

@@ -1,11 +1,12 @@
 #pragma once
 #include <vector>
 #include <thread>
-#include <queue>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <future>
 
 //Singleton
 class ThreadManager
@@ -13,7 +14,21 @@ class ThreadManager
 public:
 	static ThreadManager* GetInstance();
 
-	void AddJobFunction(const std::function<void()>& job);
+	template<class F, class R = std::result_of_t<F& ()>>
+	std::future<R> AddJobFunction(F&& f)
+	{
+		std::packaged_task<R()> pt(std::forward<F>(f));
+		auto r = pt.get_future(); //return value
+
+		{ //scope to destroy lock
+			std::unique_lock<std::mutex> lock(m_QueueMutex);
+			m_JobQueue.emplace_back(std::move(pt));
+		}
+
+		m_ConditionVariable.notify_one(); //notify threads that a task is added
+
+		return r;
+	}
 
 	void Destroy();
 
@@ -27,7 +42,7 @@ private:
 
 	static ThreadManager* m_Instance;
 	std::vector<std::thread> m_Threads;
-	std::queue<std::function<void()>> m_JobQueue;
+	std::deque<std::packaged_task<void()>> m_JobQueue;
 
 	std::mutex m_QueueMutex;
 	std::condition_variable m_ConditionVariable;

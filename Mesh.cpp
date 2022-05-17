@@ -52,7 +52,7 @@ Mesh::Mesh()
 	, m_PathName{}
 {
 	LoadPlotData(int(m_DiastolicInterval.count()) + 2);
-	m_TasksFinished.resize(ThreadManager::GetInstance()->GetNrThreads(), false);
+	m_TasksFinished.reserve(ThreadManager::GetInstance()->GetNrThreads());
 }
 
 Mesh::Mesh(ID3D11Device* pDevice, const std::vector<VertexInput>& vertices, const std::vector<uint32_t>& indices)
@@ -648,14 +648,15 @@ void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D
 
 	for (int i = 0; i < nrThreads; i++)
 	{
-		ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, firstVertex, jobSize, i));
+		m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, firstVertex, jobSize)));
 		firstVertex += int(jobSize);
 	}
 
-	while (!std::all_of(m_TasksFinished.begin(), m_TasksFinished.end(), [](bool curr) {return curr; }))
+	for (size_t i = 0; i < m_TasksFinished.size(); i++)
 	{
-		std::this_thread::sleep_for(std::chrono::microseconds(5));
+		m_TasksFinished[i].wait();
 	}
+	m_TasksFinished.clear();
 }
 
 void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
@@ -664,7 +665,7 @@ void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11Dev
 
 	auto err = cudaGetLastError();
 	if (err != cudaSuccess) {
-		fprintf(stderr, "Failed to launch vectorAdd kernel (error code %s)!\n",
+		fprintf(stderr, "Failed to launch execute gpu update (error code %s)!\n",
 			cudaGetErrorString(err));
 		exit(EXIT_FAILURE);
 	}
@@ -698,7 +699,7 @@ void Mesh::SetUpdateSystem(UpdateSystem system)
 //
 //}
 
-void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount, int taskId)
+void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount)
 {
 	TIME();
 	for (size_t i = firstVertex; i < firstVertex+vertexCount; i++)
@@ -759,8 +760,6 @@ void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist,
 			break;
 		}
 	}
-
-	m_TasksFinished[taskId] = true;
 }
 
 void Mesh::PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer)

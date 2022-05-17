@@ -6,7 +6,7 @@ void ThreadManager::ThreadLoop()
 {
     while (!m_Quit)
     {
-        std::function<void()> job;
+        std::packaged_task<void()> job;
         {
             std::unique_lock<std::mutex> lock(m_QueueMutex);
 
@@ -18,9 +18,13 @@ void ThreadManager::ThreadLoop()
             if (m_JobQueue.empty())
                 continue;
 
-            job = m_JobQueue.front();
-            m_JobQueue.pop();
+            job = std::move(m_JobQueue.front());
+            m_JobQueue.pop_front();
         }
+
+        if (!job.valid())
+            return;
+
         job();
     }
 }
@@ -30,16 +34,6 @@ ThreadManager* ThreadManager::GetInstance() // singleton
     if (m_Instance == nullptr)
         m_Instance = new ThreadManager;
     return m_Instance;
-}
-
-void ThreadManager::AddJobFunction(const std::function<void()>& job)
-{
-    { //scope to destroy lock
-        std::unique_lock<std::mutex> lock(m_QueueMutex);
-        m_JobQueue.push(job);
-    }
-
-    m_ConditionVariable.notify_one(); //notify threads that a task is added
 }
 
 void ThreadManager::Destroy()
@@ -65,7 +59,7 @@ size_t ThreadManager::GetNrThreads()
 
 ThreadManager::ThreadManager()
 {
-    int nrThreads = std::thread::hardware_concurrency(); //number of threads available in system
+    int nrThreads = 8; //number of threads available in system
     m_Threads.reserve(nrThreads);
     for (size_t i = 0; i < nrThreads; i++)
     {
