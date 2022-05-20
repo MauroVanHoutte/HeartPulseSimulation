@@ -44,11 +44,7 @@ Mesh::Mesh()
 	, m_WorldMatrix{ glm::mat4{1.f} }
 	, m_SkipOptimization{false}
 	//Data
-	, m_DiastolicInterval{200}
 	, m_APThreshold{0}
-	, m_APMinValue(0)
-	, m_APMaxValue(0)
-	, m_APD(0)
 	, m_PathName{}
 {
 	LoadPlotData(int(m_DiastolicInterval.count()) + 2);
@@ -188,19 +184,9 @@ std::vector<VertexInput>& Mesh::GetVertexBufferReference()
 	return m_VertexBuffer;
 }
 
-const std::vector<float>& Mesh::GetAPPlot() const
-{
-	return m_APPlot;
-}
-
 glm::fvec2 Mesh::GetMinMax() const
 {
 	return glm::fvec2{ m_APMinValue, m_APMaxValue };
-}
-
-float Mesh::GetAPD() const
-{
-	return m_APD;
 }
 
 std::chrono::milliseconds Mesh::GetDiastolicInterval() const
@@ -566,10 +552,10 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 	switch (m_UpdateSystem)
 	{
 	case UpdateSystem::Serial:
-		UpdateSerial(deltaTimeInMs, deltaTime, dist, pDeviceContext);
+		UpdateSerial(deltaTimeInMs, deltaTime, pDeviceContext);
 		break;
 	case UpdateSystem::Multithreaded:
-		UpdateThreaded(deltaTimeInMs, deltaTime, dist, pDeviceContext);
+		UpdateThreaded(deltaTimeInMs, deltaTime, pDeviceContext);
 		break;
 	case UpdateSystem::GPU:
 		UpdateGPU(deltaTimeInMs, deltaTime, dist, pDeviceContext);
@@ -582,73 +568,20 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 	UpdateVertexBuffer(pDeviceContext);
 }
 
-void Mesh::UpdateSerial(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
+void Mesh::UpdateSerial(float deltaTimeInMs, float deltaTime, ID3D11DeviceContext* pDeviceContext)
 {
-	for (VertexInput& vertex : m_VertexBuffer)
-	{
-		switch (vertex.state)
-		{
-		case VertexInput::State::APD:
-		{
-			vertex.timePassed += deltaTimeInMs;
-
-			int idx = int(vertex.timePassed);
-
-			if (!m_APPlot.empty() && idx > 0 && idx < m_APPlot.size() && (size_t(idx) + size_t(1)) < m_APPlot.size())
-			{
-				float value1 = m_APPlot[idx];
-				float value2 = m_APPlot[(size_t(idx) + size_t(1))];
-				float t = vertex.timePassed - idx;
-
-				float lerpedValue = value1 + t * (value2 - value1);
-
-				float valueRange01 = (lerpedValue - m_APMinValue) / dist;
-
-				vertex.actionPotential = lerpedValue;
-				vertex.apVisualization = valueRange01;
-			}
-
-			if (vertex.timePassed >= m_APD)
-			{
-				vertex.timePassed = 0.f;
-				vertex.state = VertexInput::State::DI;
-				vertex.apVisualization = 0.f;
-			}
-
-			break;
-		}
-		case VertexInput::State::DI:
-			vertex.timePassed += deltaTimeInMs;
-
-			if (vertex.timePassed >= m_DiastolicInterval.count())
-			{
-				vertex.timePassed = 0.f;
-				vertex.state = VertexInput::State::Waiting;
-			}
-			break;
-
-		case VertexInput::State::Receiving:
-			vertex.timeToTravel -= deltaTime;
-			if (vertex.timeToTravel <= 0.f)
-			{
-				vertex.state = VertexInput::State::Waiting;
-				PulseVertexV3(&vertex, pDeviceContext, false);
-			}
-			break;
-		}
-	}
+	UpdateVertexCluster(deltaTimeInMs, deltaTime, pDeviceContext, 0, (int)m_VertexBuffer.size());
 }
 
-void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
+void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, ID3D11DeviceContext* pDeviceContext)
 {
-	int nrThreads = int(ThreadManager::GetInstance()->GetNrThreads());
-	int jobSize = int(ceil(m_VertexBuffer.size() / float(nrThreads)));
+	int jobSize = int(ceil(m_VertexBuffer.size() / m_NrThreads));
 
 	int firstVertex = 0;
 
-	for (int i = 0; i < nrThreads; i++)
+	for (int i = 0; i < m_NrThreads; i++)
 	{
-		m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, firstVertex, jobSize)));
+		m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, deltaTimeInMs, deltaTime, pDeviceContext, firstVertex, jobSize)));
 		firstVertex += int(jobSize);
 	}
 
@@ -661,7 +594,7 @@ void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D
 
 void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
 {
-	m_CudaUpdate.Update(m_VertexBuffer, m_APPlot, m_APMinValue, m_APD, float(m_DiastolicInterval.count()), deltaTimeInMs, deltaTime, dist);
+	m_CudaUpdate.Update(m_VertexBuffer, m_APMinValue, m_APMaxValue, deltaTimeInMs, deltaTime, dist);
 
 	auto err = cudaGetLastError();
 	if (err != cudaSuccess) {
@@ -675,10 +608,11 @@ void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11Dev
 	{
 		if (vertex.state == VertexInput::State::Receiving)
 		{
+			vertex.timePassed += deltaTimeInMs;
 			vertex.timeToTravel -= deltaTime;
 			if (vertex.timeToTravel <= 0.f)
 			{
-				vertex.state = VertexInput::State::Waiting;
+				vertex.state = VertexInput::State::DI;
 				PulseVertexV3(&vertex, pDeviceContext, false);
 			}
 		}
@@ -693,13 +627,18 @@ void Mesh::SetUpdateSystem(UpdateSystem system)
 	m_UpdateSystem = system;
 }
 
+void Mesh::SetNrThreadsUsed(int threads)
+{
+	m_NrThreads = threads;
+}
+
 
 //void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
 //{
 //
 //}
 
-void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount)
+void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount)
 {
 	TIME();
 	for (size_t i = firstVertex; i < firstVertex+vertexCount; i++)
@@ -715,23 +654,14 @@ void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist,
 		{
 			m_VertexBuffer[i].timePassed += deltaTimeInMs;
 
-			int idx = int(m_VertexBuffer[i].timePassed);
+			float timeRatio = m_VertexBuffer[i].timePassed / m_VertexBuffer[i].apd;
 
-			if (!m_APPlot.empty() && idx > 0 && idx < m_APPlot.size() && (size_t(idx) + size_t(1)) < m_APPlot.size())
-			{
-				float value1 = m_APPlot[idx];
-				float value2 = m_APPlot[(size_t(idx) + size_t(1))];
-				float t = m_VertexBuffer[i].timePassed - idx;
+			float lerpedValue = (m_APMaxValue * (1 - timeRatio)) + (m_APMinValue * timeRatio);
 
-				float lerpedValue = value1 + t * (value2 - value1);
+			m_VertexBuffer[i].actionPotential = lerpedValue;
+			m_VertexBuffer[i].apVisualization = 1 - timeRatio;
 
-				float valueRange01 = (lerpedValue - m_APMinValue) / dist;
-
-				m_VertexBuffer[i].actionPotential = lerpedValue;
-				m_VertexBuffer[i].apVisualization = valueRange01;
-			}
-
-			if (m_VertexBuffer[i].timePassed >= m_APD)
+			if (m_VertexBuffer[i].timePassed >= m_VertexBuffer[i].apd)
 			{
 				m_VertexBuffer[i].timePassed = 0.f;
 				m_VertexBuffer[i].state = VertexInput::State::DI;
@@ -742,19 +672,14 @@ void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist,
 		}
 		case VertexInput::State::DI:
 			m_VertexBuffer[i].timePassed += deltaTimeInMs;
-
-			if (m_VertexBuffer[i].timePassed >= m_DiastolicInterval.count())
-			{
-				m_VertexBuffer[i].timePassed = 0.f;
-				m_VertexBuffer[i].state = VertexInput::State::Waiting;
-			}
 			break;
 
 		case VertexInput::State::Receiving:
+			m_VertexBuffer[i].timePassed += deltaTimeInMs;
 			m_VertexBuffer[i].timeToTravel -= deltaTime;
 			if (m_VertexBuffer[i].timeToTravel <= 0.f)
 			{
-				m_VertexBuffer[i].state = VertexInput::State::Waiting;
+				m_VertexBuffer[i].state = VertexInput::State::DI;
 				PulseVertexV3(&m_VertexBuffer[i], pDeviceContext, false);
 			}
 			break;
@@ -774,38 +699,25 @@ void Mesh::PulseVertexV3(VertexInput* vertex, ID3D11DeviceContext* pDeviceContex
 {
 	if (vertex)
 	{
-		if (vertex->state == VertexInput::State::Waiting || (vertex->actionPotential < m_APThreshold && vertex->state == VertexInput::State::DI))
+		if (vertex->state == VertexInput::State::DI)
 		{
-			vertex->actionPotential = m_APPlot[0];
+			vertex->actionPotential = m_APMaxValue;
 			vertex->state = VertexInput::State::APD;
-
+			float DI = vertex->timePassed;
+			if (DI > 1000)
+				DI = 1000.f; //capped at 400ms
+			vertex->timePassed = 0;
+			vertex->apd = - 100.37809f * exp(-DI / 71.59814f) + 264.18805f; //formula approached from charts of A. Bueno-Orovio
 			for (uint32_t index : vertex->neighbourIndices)
 			{
 				VertexInput& neighbourVertex = m_VertexBuffer[index];
 
-				//Potential problem with fibres. c0 is in m/s while the distance is most likely not in meters.
-					//This is likely the cause of it.
 				float distance = glm::distance(vertex->position, neighbourVertex.position);
-				float conductionVelocity = m_ConductionVelocity;
-
-				if (UseFibres())
-				{
-					float d1 = 1; // parallel with fibre
-					float d2 = d1 / 5; // perpendiculat with fibre
-					float c0 = 0.6f; // m/s
-
-					glm::fvec3 pulseDirection = glm::normalize(neighbourVertex.position - vertex->position);
-					float cosAngle = glm::dot(vertex->fibreDirection, pulseDirection);
-
-					float c = c0 * sqrtf(d2 + (d1 - d2) * powf(cosAngle, 2));
-					conductionVelocity = c * 100;
-					//std::cout << c << "\n";
-				}
+				float conductionVelocity = -4252.2672f * exp(-DI / 6.50614f) + 84.52911f; //formula approached from charts of A. Bueno-Orovio
 
 				float travelTime = distance / conductionVelocity;
-				float timeToRecover = m_DiastolicInterval.count() - neighbourVertex.timePassed;
 
-				if (neighbourVertex.state == VertexInput::State::Waiting || (neighbourVertex.state == VertexInput::State::DI && timeToRecover < travelTime))
+				if (neighbourVertex.state == VertexInput::State::DI)
 				{
 					neighbourVertex.timeToTravel = travelTime;
 					neighbourVertex.state = VertexInput::State::Receiving;
@@ -832,7 +744,7 @@ void Mesh::ClearPulse(ID3D11DeviceContext* pDeviceContext)
 	for (VertexInput& vertex : m_VertexBuffer)
 	{
 		vertex.apVisualization = 0.f;
-		vertex.state = VertexInput::State::Waiting;
+		vertex.state = VertexInput::State::DI;
 		vertex.timePassed = 0.f;
 	}
 
@@ -1559,13 +1471,13 @@ void Mesh::CreateIndexForVertices()
 	}
 }
 
-void Mesh::LoadPlotData(int nrOfValuesAPD)
+void Mesh::LoadPlotData(int )
 {
 	//function to calculate near values of APD(Time) Plot
 	//y = 15.311ln(x) + 219.77
 	//function to calculate ln(x)
 	//ln(x) = log(x) / log(2.71828)
-	m_APDPlot.clear();
+	/*m_APDPlot.clear();
 	m_APDPlot.resize(nrOfValuesAPD);
 
 	for (int x{}; x < nrOfValuesAPD; x++)
@@ -1585,11 +1497,11 @@ void Mesh::LoadPlotData(int nrOfValuesAPD)
 		float t = diastolicInterval - int(idx);
 
 		m_APD = value1 + t * (value2 - value1);
-	}
+	}*/
 
 	//function to calculate near values of the AP(ms) Plot
 	//y = -0.0005x² - 0.0187x + 32.118
-	m_APThreshold = 0.f;
+	/*m_APThreshold = 0.f;
 
 	m_APPlot.clear();
 	m_APPlot.resize((size_t(m_APD) + size_t(1)));
@@ -1607,15 +1519,15 @@ void Mesh::LoadPlotData(int nrOfValuesAPD)
 
 		if (maxValue < value)
 			maxValue = value;
-	}
+	}*/
 
-	m_APMinValue = minValue;
-	m_APMaxValue = maxValue;
+	/*m_APMinValue = minValue;
+	m_APMaxValue = maxValue;*/
 
 	//function to calculate near value of CV(DI)
 	//y = -0.0024x² + 0.6514x + 13.869
-	float DI = float(m_DiastolicInterval.count());
-	m_ConductionVelocity = -0.0024f * powf(DI, 2) + 0.6514f * DI + 13.869f;
+	/*float DI = float(m_DiastolicInterval.count());
+	m_ConductionVelocity = -0.0024f * powf(DI, 2) + 0.6514f * DI + 13.869f;*/
 }
 
 void Mesh::CreateEffect(ID3D11Device* pDevice)

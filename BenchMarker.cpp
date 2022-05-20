@@ -37,7 +37,7 @@ void Benchmarker::EndBenchmark()
 	m_File << "Average time per execution: " << totalTime / m_Durations.size() << std::endl;
 	m_File.close();
 	m_Durations.clear();
-	m_ThousansIterations = 1;
+	m_ThousandIterations = 1;
 }
 
 Benchmarker::Benchmarker()
@@ -49,12 +49,12 @@ void Benchmarker::AddDuration(float duration)
 {
 	m_Durations.push_back(duration);
 
-	if (m_Durations.size() > 1000 * m_ThousansIterations)
+	if (m_Durations.size() > 1000 * m_ThousandIterations)
 	{
-		float total = std::accumulate(m_Durations.begin(), m_Durations.end(), 0.f);
-		std::cout << 1000 * m_ThousansIterations << " iterations with a total time of : " << total << std::endl;
+		float total = std::accumulate(m_Durations.cbegin(), m_Durations.cend(), 0.f);
+		std::cout << 1000 * m_ThousandIterations << " iterations with a total time of : " << total << std::endl;
 		std::cout << "Average time per iteration: " << total / m_Durations.size() << std::endl;
-		m_ThousansIterations++;
+		m_ThousandIterations++;
 	}
 }
 

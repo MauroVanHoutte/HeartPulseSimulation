@@ -6,7 +6,6 @@ struct VertexInput
 {
 	enum class State
 	{
-		Waiting,	//The vertex does not have a pulse running throug it
 		Receiving,	//The vertex has an incoming pulse.
 		APD,		//The vertex is in it's Action Potential Duration(APD)
 		DI			//The vertex is in it's Diastolic Interval(DI)
@@ -25,7 +24,7 @@ struct VertexInput
 		, uv(uv)
 		, tangent({ 0, 0, 0 })
 		, apVisualization(0.f)
-		, state{ State::Waiting }
+		, state{ State::DI }
 		, index(index)
 		, actionPotential{ 0.f }
 		, timePassed(0.f)
@@ -44,7 +43,7 @@ struct VertexInput
 		, uv{}
 		, tangent{ 1, 0, 0 }
 		, apVisualization{}
-		, state{ State::Waiting }
+		, state{ State::DI }
 		, index{}
 		, actionPotential{ 0.f }
 		, timePassed(0.f)
@@ -70,6 +69,7 @@ struct VertexInput
 	float actionPotential;					//Current action potential (in mV)
 	float timePassed;						//Time passed in different states
 	float timeToTravel;						//The time before activating this vertex
+	float apd;
 	bool fibreAssigned;						//A boolean indicating if a fibre was assigned to this vertex
 	glm::fvec3 fibreDirection;				//The direction of the heart fibre at this point
 	std::set<uint32_t> neighbourIndices;	//The indices of the neighbouring vertices
