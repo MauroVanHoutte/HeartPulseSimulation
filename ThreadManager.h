@@ -17,7 +17,7 @@ public:
 	template<class F, class R = std::result_of_t<F& ()>>
 	std::future<R> AddJobFunction(F&& f)
 	{
-		std::packaged_task<R()> pt(std::forward<F>(f));
+		std::packaged_task<R()> pt(std::forward<F>(f)); //allows returning a future
 		auto r = pt.get_future(); //return value
 
 		{ //scope to destroy lock
@@ -25,9 +25,9 @@ public:
 			m_JobQueue.emplace_back(std::move(pt));
 		}
 
-		m_ConditionVariable.notify_one(); //notify threads that a task is added
+		m_ConditionVariable.notify_one(); //notify thread that a task is added
 
-		return r;
+		return r; // future of the task is returned and can be used to wait for completion of the task
 	}
 
 	void Destroy();
