@@ -904,30 +904,16 @@ void Mesh::LoadMeshFromOBJ(uint32_t )
 
 			LoadCachedFibres();
 
-			//Remove indices pointing towards duplicate vertices
-			/*if (!m_SkipOptimization)
-				OptimizeIndexBuffer();*/
-
 			OptimizeVertexAndIndexBuffer();
 
 			CalculateTangents();
-
-			//Remove the duplicate vertices from the vertex buffer
-			//if (!m_SkipOptimization)
-			//{
-			//	std::cout << "\n--- Started Optimizing Vertex Buffer ---\n";
-			//	OptimizeVertexBuffer();
-			//	std::cout << "--- Finished Optimizing Vertex Buffer ---\n";
-			//}
 
 			//Get the neighbour of every vertex
 		
 			std::cout << "\n--- Started Calculating Vertex Neighbours ---\n";
 			CalculateNeighbours(1);
-			std::cout << "--- Finished Calculating Vertex Neighbours ---\n";
-			
-
 			//CalculateInnerNeighbours();
+			std::cout << "--- Finished Calculating Vertex Neighbours ---\n";
 
 			std::cout << "\n" << m_VertexBuffer.size() << " Vertices After Optimization\n";
 
@@ -1317,9 +1303,11 @@ void Mesh::OptimizeVertexAndIndexBuffer()
 		if (VerticesMap.count(vertex) == 0)
 		{
 			VerticesMap[vertex] = uint32_t(uniqueVertices.size());
+			VertexInput newVertex = vertex;
+			newVertex.index = uint32_t(uniqueVertices.size());
 			uniqueVertices.push_back(vertex);
 		}
-
+		
 		uniqueIndices.push_back(VerticesMap[vertex]);
 	}
 
@@ -1327,43 +1315,12 @@ void Mesh::OptimizeVertexAndIndexBuffer()
 	m_IndexBuffer = uniqueIndices;
 }
 
-void Mesh::CalculateNeighbours(int nrOfThreads)
+void Mesh::CalculateNeighbours(int )
 {
-	auto GetNeighboursInRange = [this](uint32_t start, uint32_t end)
+	auto GetNeighbours = [this](size_t start, size_t end)
 	{
-		for (uint32_t i{ start }; i < end; i += 3)
+		for (size_t i{ start }; i < end; i += 3)
 		{
-			/*std::vector<uint32_t>::iterator it = std::find(m_IndexBuffer.begin() + start, m_IndexBuffer.begin() + end, i);
-			while (it != m_IndexBuffer.end() && it < m_IndexBuffer.begin() + end)
-			{
-				uint32_t index = uint32_t(it - m_IndexBuffer.begin());
-				int modulo = index % 3;
-				if (modulo == 0)
-				{
-					if (it + 1 != m_IndexBuffer.end())
-						m_VertexBuffer[i].neighbourIndices.insert(*(it + 1));
-					if (it + 2 != m_IndexBuffer.end())
-						m_VertexBuffer[i].neighbourIndices.insert(*(it + 2));
-				}
-				else if (modulo == 1)
-				{
-					if (it - 1 != m_IndexBuffer.end())
-						m_VertexBuffer[i].neighbourIndices.insert(*(it - 1));
-					if (it + 1 != m_IndexBuffer.end())
-						m_VertexBuffer[i].neighbourIndices.insert(*(it + 1));
-				}
-				else
-				{
-					if (it - 1 != m_IndexBuffer.end())
-						m_VertexBuffer[i].neighbourIndices.insert(*(it - 1));
-					if (it - 2 != m_IndexBuffer.end())
-						m_VertexBuffer[i].neighbourIndices.insert(*(it - 2));
-				}
-
-				it++;
-				it = std::find(it, (m_IndexBuffer.begin() + end), i);
-			}*/
-
 			auto idx1 = m_IndexBuffer[i];
 			auto idx2 = m_IndexBuffer[i + 1];
 			auto idx3 = m_IndexBuffer[i + 2];
@@ -1371,41 +1328,32 @@ void Mesh::CalculateNeighbours(int nrOfThreads)
 			m_VertexBuffer[idx1].neighbourIndices.insert({ idx2, idx3 });
 			m_VertexBuffer[idx2].neighbourIndices.insert({ idx1, idx3 });
 			m_VertexBuffer[idx3].neighbourIndices.insert({ idx2, idx1 });
-
 		}
 	};
 
-	const uint32_t threadCount = nrOfThreads;
+	const size_t threadCount = ThreadManager::GetInstance()->GetNrThreads();
 	std::cout << "\nStarted with " << threadCount << " thread(s)\n";
-	std::vector<std::thread> threads{};
-
-	const uint32_t diff = uint32_t(m_IndexBuffer.size()) / threadCount;
-	for (uint32_t i{}; i < threadCount; i++)
+	std::vector<std::future<void>> futures;
+	futures.reserve(threadCount);
+	const size_t diff = m_IndexBuffer.size() / threadCount;
+	for (size_t i{}; i < threadCount; i++)
 	{
-		uint32_t start, end;
+		size_t start, end;
 		start = i * diff;
 		end = i * diff + (diff - 1);
 
-		if (start >= uint32_t(m_IndexBuffer.size()))
-			start = uint32_t(m_IndexBuffer.size() - 1);
+		if (start >= m_IndexBuffer.size())
+			start = m_IndexBuffer.size() - 1;
 
-		if (end >= uint32_t(m_IndexBuffer.size()))
-			end = uint32_t(m_IndexBuffer.size() - 1);
+		if (end >= m_IndexBuffer.size())
+			end = m_IndexBuffer.size() - 1;
 
-		threads.push_back(std::thread{GetNeighboursInRange, start, end});
+		futures.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(GetNeighbours, start, end)));
 	}
 
-	uint32_t joinedThreads = 0;
-	while (joinedThreads != threadCount)
+	for (size_t i = 0; i < futures.size(); i++)
 	{
-		for (std::thread& thread : threads)
-		{
-			if (thread.joinable())
-			{
-				thread.join();
-				++joinedThreads;
-			}
-		}
+		futures[i].wait();
 	}
 }
 
@@ -1413,18 +1361,11 @@ void Mesh::CalculateInnerNeighbours()
 {
 	std::cout << "\n[Started Calculating Inner Neighbours]\n";
 	TimePoint start = std::chrono::high_resolution_clock::now();
-	float margin = -0.8f;
-	float maxDistance = 20.f;
+	float margin = -0.95f;
+	float maxDistance = 5.f;
 
 	for (int i{}; i < m_VertexBuffer.size(); i++)
 	{
-		if (i % 1000 == 0 || i == m_VertexBuffer.size() - 1)
-		{
-			printf("\33[2K\r");
-			int percentage = int((float(i) / float(m_VertexBuffer.size() - 1)) * 100);
-			std::cout << i << " / " << m_VertexBuffer.size() << " " << percentage << "%";
-		}
-
 		VertexInput& vertex1 = m_VertexBuffer[i];
 		std::vector<VertexInput>::iterator it = m_VertexBuffer.begin() + (i + 1);
 		while (it != m_VertexBuffer.end())
