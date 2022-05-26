@@ -22,5 +22,5 @@ private:
 	std::vector<float> m_Durations{};
 	std::ofstream m_File{};
 
-	int m_ThousandIterations = 1;
+	int m_ThousansIterations = 1;
 };

@@ -610,7 +610,7 @@ void DirectXRenderer::RenderImGui()
 
     if (pMesh)
     {
-	    /*ImGui::Begin("Plots");
+	    ImGui::Begin("Plots");
 	    const std::vector<float>& values = pMesh->GetAPPlot();
 	    glm::fvec2 minMax = pMesh->GetMinMax();
 
@@ -628,7 +628,7 @@ void DirectXRenderer::RenderImGui()
         string = "Diastolic Interval: " + std::to_string(pMesh->GetDiastolicInterval().count());
         ImGui::Text(string.c_str());
 
-	    ImGui::End();*/
+	    ImGui::End();
     }
 
     ImGui::Render();
@@ -822,7 +822,6 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         
         const char* items[] = { "Serial", "Multithreaded", "GPU" };
         static const char* selectedItem = items[0];
-        static size_t selectedIdx = 0;
 
         if (ImGui::BeginCombo("UpdateSystem", selectedItem))
         {
@@ -832,7 +831,6 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
                 if (ImGui::Selectable(items[i], isSelected))
                 {
                     selectedItem = items[i];
-                    selectedIdx = i;
                     switch (i)
                     {
                     case 0:
@@ -850,13 +848,6 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
                     ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
-        }
-
-        static int nrThreads = 8;
-        if (selectedIdx == 1)
-        {
-            ImGui::SliderInt("NrThreads", &nrThreads, 1, 8);
-            pMesh->SetNrThreadsUsed(nrThreads);
         }
 
 
@@ -878,6 +869,7 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         std::string state{};
         switch (vertexBuffer[m_Index].state)
         {
+        case VertexInput::State::Waiting: state = "Waiting"; break;
         case VertexInput::State::Receiving: state = "Receiving"; break;
         case VertexInput::State::APD: state = "Action Potential"; break;
         case VertexInput::State::DI: state = "Diastolic Interval"; break;

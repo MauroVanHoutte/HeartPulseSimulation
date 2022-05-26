@@ -60,12 +60,11 @@ public:
 	void UpdateVertexBuffer(ID3D11DeviceContext* pDeviceContext);
 
 	void UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime);
-	void UpdateSerial(float deltaTimeInMs, float deltaTime, ID3D11DeviceContext* pDeviceContext);
-	void UpdateThreaded(float deltaTimeInMs, float deltaTime, ID3D11DeviceContext* pDeviceContext);
+	void UpdateSerial(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
+	void UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
 	void UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
 	void SetUpdateSystem(UpdateSystem system);
-	void SetNrThreadsUsed(int threads);
-	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount);
+	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount);
 	void PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 	void PulseVertexV3(VertexInput* vertex, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 
@@ -79,10 +78,12 @@ public:
 	const std::vector<VertexInput>& GetVertexBuffer() const;
 	std::vector<VertexInput>& GetVertexBufferReference();
 
+	const std::vector<float>& GetAPPlot() const;
 	std::chrono::milliseconds GetDiastolicInterval() const;
 	glm::fvec2 GetMinMax() const;
 	glm::fvec3 GetScale();
 	glm::fvec3 GetTranslation();
+	float GetAPD() const;
 	void UseFibres(bool useFibres);
 	bool UseFibres();
 	void UseThreading(bool useThreading);
@@ -155,15 +156,18 @@ private:
 	
 	std::chrono::milliseconds m_DiastolicInterval;
 	float m_APThreshold;
-	float m_APMaxValue = 25.f;
-	float m_APMinValue = -85.f;
+	float m_APMaxValue;
+	float m_APMinValue;
+	float m_APD;
+	float m_ConductionVelocity;
+	std::vector<float> m_APPlot;						// APD (mV) in function of time (ms)
+	std::vector<std::chrono::milliseconds> m_APDPlot;	// APD (ms) in function of Diastolic Interval (ms)// DI (ms) in function of Conduction Velocity (cm/s)
 
 	//File Data
 	std::string m_PathName;
 	std::mutex m_Mutex{};
 
 	//Multithreading
-	int m_NrThreads = 8;
 	std::vector<std::future<void>> m_TasksFinished{};
 	CudaUpdate m_CudaUpdate{};
 	UpdateSystem m_UpdateSystem = UpdateSystem::Serial;
