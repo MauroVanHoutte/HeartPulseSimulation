@@ -253,7 +253,7 @@ void DirectXRenderer::CreateMesh(const std::string& filePath, FileType fileType,
     mesh->UseFibres(useFibres);
     if (!mesh->GetVertexBuffer().empty())
     {
-        glm::fvec3 pos = mesh->GetVertexBuffer()[0].position;
+        glm::fvec3 pos = mesh->GetVertexBuffer()[0].pPulseData->position;
         m_pCamera->Translate(pos);
     }
 
@@ -704,8 +704,10 @@ void DirectXRenderer::ImGuiDrawMatricesHeader() const
 void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
 {
         pMesh = m_pMeshes[0];
-        std::vector<VertexInput>& vertexBuffer = pMesh->GetVertexBufferReference();
-        VertexInput initialVertex = vertexBuffer[m_Index];
+        std::vector<VertexData>& vertexBuffer = pMesh->GetVertexBufferReference();
+        std::vector<VertexInput>& vertexDrawData = pMesh->GetVertexDrawData();
+        VertexData initialVertex = vertexBuffer[m_Index];
+        VertexInput initialVertexDrawData = vertexDrawData[m_Index];
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -713,24 +715,24 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         //Color Tab
         bool open = true;
         ImGui::Begin("Color", &open);
-        const float* data = value_ptr(initialVertex.color1);
+        const float* data = value_ptr(initialVertexDrawData.color1);
         float color1[3] = { (data)[0], (data)[1], (data)[2] };
         if (ImGui::ColorPicker3("Start Color", color1))
         {
             if (color1[0] != data[0] || color1[1] != data[1] || color1[2] != data[2])
             {
-                initialVertex.color1 = glm::fvec3{ color1[0], color1[1], color1[2] };
+                initialVertexDrawData.color1 = glm::fvec3{ color1[0], color1[1], color1[2] };
                 updateBuffer = true;
             }
         }
 
-        data = value_ptr(initialVertex.color2);
+        data = value_ptr(initialVertexDrawData.color2);
         float color2[3] = { (data)[0], (data)[1], (data)[2] };
         if (ImGui::ColorPicker3("Pulse Color", color2))
         {
             if (color2[0] != data[0] || color2[1] != data[1] || color2[2] != data[2])
             {
-                initialVertex.color2 = glm::fvec3{ color2[0], color2[1], color2[2] };
+                initialVertexDrawData.color2 = glm::fvec3{ color2[0], color2[1], color2[2] };
                 updateBuffer = true;
             }
         }
@@ -798,17 +800,17 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
             return indicesString;
         };
 
-        ImGui::Text(("Position: " + vec3ToString(initialVertex.position)).c_str());
-        ImGui::Text(("Color: " + vec3ToString(initialVertex.color1)).c_str());
-        ImGui::Text(("Normal: " + vec3ToString(initialVertex.normal)).c_str());
-        ImGui::Text(("Tangent: " + vec3ToString(initialVertex.tangent)).c_str());
-        ImGui::Text(("UV: " + vec2ToString(initialVertex.uv)).c_str());
-        ImGui::Text(("Power: " + std::to_string(initialVertex.apVisualization)).c_str());
+        ImGui::Text(("Position: " + vec3ToString(initialVertex.pPulseData->position)).c_str());
+        ImGui::Text(("Color: " + vec3ToString(initialVertexDrawData.color1)).c_str());
+        ImGui::Text(("Normal: " + vec3ToString(initialVertexDrawData.normal)).c_str());
+        ImGui::Text(("Tangent: " + vec3ToString(initialVertexDrawData.tangent)).c_str());
+        ImGui::Text(("UV: " + vec2ToString(initialVertexDrawData.uv)).c_str());
+        ImGui::Text(("Power: " + std::to_string(initialVertexDrawData.apVisualization)).c_str());
         ImGui::Text(("Active Potential: " + std::to_string(initialVertex.actionPotential)).c_str());
-        ImGui::Text(("Neighbour Indices: " + indicesToString(initialVertex.neighbourIndices)).c_str());
+        ImGui::Text(("Neighbour Indices: " + indicesToString(initialVertex.pPulseData->pNeighborIndices)).c_str());
 
         ImGui::Spacing();
-        ImGui::Text(("Fibre Direction: " + vec3ToString(initialVertex.fibreDirection)).c_str());
+        ImGui::Text(("Fibre Direction: " + vec3ToString(initialVertex.pPulseData->fibreDirection)).c_str());
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -869,10 +871,10 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         std::string state{};
         switch (vertexBuffer[m_Index].state)
         {
-        case VertexInput::State::Waiting: state = "Waiting"; break;
-        case VertexInput::State::Receiving: state = "Receiving"; break;
-        case VertexInput::State::APD: state = "Action Potential"; break;
-        case VertexInput::State::DI: state = "Diastolic Interval"; break;
+        case State::Waiting: state = "Waiting"; break;
+        case State::Receiving: state = "Receiving"; break;
+        case State::APD: state = "Action Potential"; break;
+        case State::DI: state = "Diastolic Interval"; break;
         }
         ImGui::Text(state.c_str());
 
@@ -971,10 +973,10 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
 
         if (updateBuffer)
         {
-            for (VertexInput& vertex : vertexBuffer)
+            for (VertexInput& vertexData : vertexDrawData)
             {
-                vertex.color1 = initialVertex.color1;
-                vertex.color2 = initialVertex.color2;
+                vertexData.color1 = initialVertexDrawData.color1;
+                vertexData.color2 = initialVertexDrawData.color2;
             }
 
             pMesh->UpdateVertexBuffer(m_pDeviceContext);

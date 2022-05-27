@@ -7,17 +7,17 @@
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
 
-__global__ void UpdateNodes(VertexInput* vertices, size_t nrOfVerts, float* apPlot, size_t apPlotSize, float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float dist)
+__global__ void UpdateNodes(VertexData* vertices, size_t nrOfVerts, float* apPlot, size_t apPlotSize, float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float dist)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i >= nrOfVerts)
 		return;
 
-	VertexInput& vertex = vertices[i];
+	VertexData& vertex = vertices[i];
 
 	switch (vertex.state)
 	{
-	case VertexInput::State::APD:
+	case State::APD:
 		vertex.timePassed += deltaTimeInMs;
 
 		int idx = int(vertex.timePassed);
@@ -33,24 +33,22 @@ __global__ void UpdateNodes(VertexInput* vertices, size_t nrOfVerts, float* apPl
 			float valueRange01 = (lerpedValue - apMinValue) / dist;
 
 			vertex.actionPotential = lerpedValue;
-			vertex.apVisualization = valueRange01;
 		}
 
 		if (vertex.timePassed >= apd)
 		{
 			vertex.timePassed = 0.f;
-			vertex.state = VertexInput::State::DI;
-			vertex.apVisualization = 0.f;
+			vertex.state = State::DI;
 		}
 
 		break;
-	case VertexInput::State::DI:
+	case State::DI:
 		vertex.timePassed += deltaTimeInMs;
 
 		if (vertex.timePassed >= diastolicInterval)
 		{
 			vertex.timePassed = 0.f;
-			vertex.state = VertexInput::State::Waiting;
+			vertex.state = State::Waiting;
 		}
 		break;
 	}
@@ -67,14 +65,14 @@ CudaUpdate::~CudaUpdate()
 
 }
 
-void CudaUpdate::Update(std::vector<VertexInput>& vertices, std::vector<float>& apPlot, float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float dist)
+void CudaUpdate::Update(std::vector<VertexData>& vertices, std::vector<float>& apPlot, float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float dist)
 {
 	cudaError_t err = cudaSuccess;
 	if (m_DeviceVerts == nullptr)
 	{
-		err = cudaMalloc((void**)&m_DeviceVerts, vertices.size() * sizeof(VertexInput));
+		err = cudaMalloc((void**)&m_DeviceVerts, vertices.size() * sizeof(VertexData));
 	}
-	cudaMemcpy(m_DeviceVerts, vertices.data(), vertices.size() * sizeof(VertexInput), cudaMemcpyHostToDevice);
+	cudaMemcpy(m_DeviceVerts, vertices.data(), vertices.size() * sizeof(VertexData), cudaMemcpyHostToDevice);
 	if (m_DeviceApPlot == nullptr)
 	{
 		err = cudaMalloc((void**)&m_DeviceApPlot, apPlot.size() * sizeof(float));
@@ -88,6 +86,6 @@ void CudaUpdate::Update(std::vector<VertexInput>& vertices, std::vector<float>& 
 
 	UpdateNodes <<<numBlocks, threadsPerBlock>>>(m_DeviceVerts, vertices.size(), m_DeviceApPlot, apPlot.size(), apMinValue, apd, diastolicInterval, deltaTimeInMs, deltaTime, dist);
 
-	cudaMemcpy(vertices.data(), m_DeviceVerts, vertices.size() * sizeof(VertexInput), cudaMemcpyDeviceToHost);
+	cudaMemcpy(vertices.data(), m_DeviceVerts, vertices.size() * sizeof(VertexData), cudaMemcpyDeviceToHost);
 
 }

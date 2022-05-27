@@ -38,9 +38,9 @@ enum class UpdateSystem
 
 
 namespace std {
-	template<> struct hash<VertexInput> {
-		size_t operator()(VertexInput const& vertex) const {
-			return (hash<glm::vec3>()(vertex.position));
+	template<> struct hash<VertexData> {
+		size_t operator()(VertexData const& vertex) const {
+			return (hash<glm::vec3>()(vertex.pPulseData->position));
 		}
 	};
 }
@@ -66,7 +66,7 @@ public:
 	void SetUpdateSystem(UpdateSystem system);
 	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount);
 	void PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
-	void PulseVertexV3(VertexInput* vertex, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
+	void PulseVertexV3(VertexData* vertex, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 
 	void PulseMesh(ID3D11DeviceContext* pDeviceContext);
 	void ClearPulse(ID3D11DeviceContext* pDeviceContext);
@@ -75,8 +75,9 @@ public:
 
 	const glm::mat4& GetWorldMatrix() const;
 	const std::vector<uint32_t>& GetIndexBuffer() const;
-	const std::vector<VertexInput>& GetVertexBuffer() const;
-	std::vector<VertexInput>& GetVertexBufferReference();
+	const std::vector<VertexData>& GetVertexBuffer() const;
+	std::vector<VertexData>& GetVertexBufferReference();
+	std::vector<VertexInput>& GetVertexDrawData();
 
 	const std::vector<float>& GetAPPlot() const;
 	std::chrono::milliseconds GetDiastolicInterval() const;
@@ -95,7 +96,7 @@ public:
 	void StartBenchmarking(const std::string& name);
 	void StopBenchmarking();
 
-	void SetVertexBuffer(ID3D11DeviceContext* pDeviceContext, const std::vector<VertexInput>& vertexBuffer);
+	void SetVertexBuffer(ID3D11DeviceContext* pDeviceContext, const std::vector<VertexData>& vertexBuffer);
 	void SetWireframe(bool enabled);
 	void SetScale(const glm::fvec3& scale);
 	void SetScale(float x, float y, float z);
@@ -121,7 +122,7 @@ private:
 	bool m_WireFrameEnabled;
 	bool m_DrawVertex;
 
-	uint32_t m_AmountIndices;
+	size_t m_AmountIndices;
 	//-------------------
 
 	//Initialization of mesh
@@ -148,8 +149,8 @@ private:
 	bool m_UseFibres;
 	glm::mat4 m_WorldMatrix;
 	std::vector<uint32_t> m_IndexBuffer;
-	std::vector<VertexInput> m_VertexBuffer;
-	std::vector<VertexInput> m_LineBuffer;
+	std::vector<VertexData> m_VertexBuffer;
+	std::vector<VertexInput> m_VertexDrawData;
 
 	//Plot Data
 	void LoadPlotData(int nrOfValuesAPD);
