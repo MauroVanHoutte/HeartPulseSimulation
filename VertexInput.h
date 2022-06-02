@@ -1,6 +1,6 @@
 #pragma once
 #include "glm.hpp"
-#include <set>
+#include <vector>
 #include <memory>
 
 enum class State
@@ -49,7 +49,6 @@ struct VertexInput
 	glm::fvec2 uv;							//UV coordinate
 	float apVisualization;					//[0, 1] value to visualize pulse
 
-	//Members not part of input layout
 };
 
 struct PulseData
@@ -57,9 +56,11 @@ struct PulseData
 	PulseData(const glm::fvec3& position)
 		: position{ position }
 	{
-	}
+	};
 
-	std::set<uint32_t> pNeighborIndices{};		//indices of connected cells
+	std::vector<uint32_t> pNeighborIndices{};		//indices of connected cells
+	uint32_t* pNeighborIndicesRaw;					//needed for cuda update
+	uint32_t neighborIndicesSize;
 	glm::fvec3 fibreDirection{};				//The direction of the heart fibre at this point
 	glm::fvec3 position{};						//World position
 };
@@ -68,11 +69,17 @@ struct VertexData
 {
 	VertexData(const glm::fvec3& position)
 	{
-		pPulseData = std::make_unique<PulseData>(position);
+		pPulseData = new PulseData{position};
 	}
 	VertexData()
 	{
-		pPulseData = std::make_unique<PulseData>(glm::fvec3{ 0, 0, 0 });
+		pPulseData = new PulseData{ glm::fvec3{ 0, 0, 0 } };
+	}
+
+	~VertexData()
+	{
+		if (pPulseData != nullptr) 
+			delete pPulseData;
 	}
 
 	VertexData(const VertexData& other)
@@ -80,7 +87,7 @@ struct VertexData
 		, timePassed{other.timePassed}
 		, timeToTravel{other.timeToTravel}
 		, state{other.state}
-		, pPulseData{ std::make_unique<PulseData>(other.pPulseData->position) }
+		, pPulseData{ new PulseData{other.pPulseData->position} }
 	{
 		pPulseData->fibreDirection = other.pPulseData->fibreDirection;
 		pPulseData->pNeighborIndices = other.pPulseData->pNeighborIndices;
@@ -92,7 +99,7 @@ struct VertexData
 		, timePassed{ other.timePassed }
 		, timeToTravel{ other.timeToTravel }
 		, state{ other.state }
-		, pPulseData{ std::make_unique<PulseData>(other.pPulseData->position)}
+		, pPulseData{ new PulseData{other.pPulseData->position} }
 	{
 		pPulseData->fibreDirection = other.pPulseData->fibreDirection;
 		pPulseData->pNeighborIndices = other.pPulseData->pNeighborIndices;
@@ -106,9 +113,9 @@ struct VertexData
 		timeToTravel = other.timeToTravel;
 		state = other.state;
 
-		pPulseData.release();
+		delete pPulseData;
 
-		pPulseData = std::make_unique<PulseData>(other.pPulseData->position);
+		pPulseData = new PulseData{other.pPulseData->position};
 		
 		pPulseData->fibreDirection = other.pPulseData->fibreDirection;
 		pPulseData->pNeighborIndices = other.pPulseData->pNeighborIndices;
@@ -122,7 +129,7 @@ struct VertexData
 	float timePassed{};						//Time passed in different states
 	float timeToTravel{};					//The time before activating this vertex
 	State state{};							//Current state of the vertex
-	std::unique_ptr<PulseData> pPulseData{};//data used when pulsed, this data is not accesed often so unique pointer reduces the size of the struct
+	PulseData* pPulseData{};//data used when pulsed, this data is not accesed often so pointer reduces the size of the struct
 
 	bool operator==(const VertexData& other)
 	{

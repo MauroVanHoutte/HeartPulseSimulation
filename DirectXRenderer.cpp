@@ -65,7 +65,6 @@ bool DirectXRenderer::Initialize()
 
 void DirectXRenderer::Render()
 {
-    TIME();
     if (!m_pDeviceContext && !m_pSwapChain)
         return;
 
@@ -248,7 +247,6 @@ void DirectXRenderer::CreateMesh(const std::string& filePath, FileType fileType,
     Mesh* mesh = nullptr;
     m_LoadingMesh = true;
 
-    TIME();
     mesh = new Mesh(m_pDevice, filePath, false, fileType, 8);
     mesh->UseFibres(useFibres);
     if (!mesh->GetVertexBuffer().empty())
@@ -788,7 +786,7 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
 
             return vecString;
         };
-        auto indicesToString = [](const std::set<uint32_t>& indices)
+        auto indicesToString = [](const std::vector<uint32_t>& indices)
         {
             std::string indicesString{};
 

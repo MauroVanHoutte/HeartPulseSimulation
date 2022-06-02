@@ -59,7 +59,7 @@ size_t ThreadManager::GetNrThreads()
 
 ThreadManager::ThreadManager()
 {
-    int nrThreads = 8; //number of threads available in system
+    int nrThreads = std::thread::hardware_concurrency(); //number of threads available in system
     m_Threads.reserve(nrThreads);
     for (size_t i = 0; i < nrThreads; i++)
     {

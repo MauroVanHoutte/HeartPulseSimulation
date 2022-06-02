@@ -110,7 +110,6 @@ void DirectXApplication::HandleInput()
 
 void DirectXApplication::Update(float deltaTime)
 {
-    //TIME();
     if (m_pDirectXRenderer->IsRunningTest() && !m_pDirectXRenderer->GetMeshes().empty())
     {
         Mesh* pMesh = m_pDirectXRenderer->GetMeshes()[0];

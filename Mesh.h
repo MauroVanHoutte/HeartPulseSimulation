@@ -65,6 +65,7 @@ public:
 	void UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
 	void SetUpdateSystem(UpdateSystem system);
 	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount);
+	void UpdateVertexParallell(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int nrThreads, int threadId);
 	void PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 	void PulseVertexV3(VertexData* vertex, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
 
@@ -170,8 +171,8 @@ private:
 
 	//Multithreading
 	std::vector<std::future<void>> m_TasksFinished{};
-	CudaUpdate m_CudaUpdate{};
 	UpdateSystem m_UpdateSystem = UpdateSystem::Serial;
+	CudaUpdate m_CudaUpdate{};
 
 	//Constant pulsing
 	float m_PulseRate = 1.5f; // in Hz

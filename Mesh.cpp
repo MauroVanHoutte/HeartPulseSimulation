@@ -89,7 +89,20 @@ Mesh::Mesh(ID3D11Device* pDevice, const std::string& filepath, bool skipOptimiza
 	default: ;
 	}
 
+	for (auto& vertex : m_VertexBuffer)
+	{
+		vertex.pPulseData->pNeighborIndicesRaw = vertex.pPulseData->pNeighborIndices.data();
+		vertex.pPulseData->neighborIndicesSize = (uint32_t)vertex.pPulseData->pNeighborIndices.size();
+	}
+
 	std::cout << "Total vertex buffer size: " << m_VertexBuffer.size() * sizeof(VertexData) << std::endl;
+
+	m_CudaUpdate.Setup(m_VertexBuffer, m_APPlot);
+	auto err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		fprintf(stderr, "Failed to setup gpu data (error code %s)!\n",
+			cudaGetErrorString(err));
+	}
 
 	{
 		std::lock_guard<std::mutex> lock(m_Mutex);
@@ -581,6 +594,7 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 		break;
 	}
 
+
 	if(m_Benchmarking)
 		Benchmarker::GetInstance()->AddDuration(std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startTime).count());
 
@@ -589,58 +603,7 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 
 void Mesh::UpdateSerial(float deltaTimeInMs, float deltaTime, float , ID3D11DeviceContext* pDeviceContext)
 {
-	for (VertexData& vertex : m_VertexBuffer)
-	{
-		switch (vertex.state)
-		{
-		case State::APD:
-		{
-			vertex.timePassed += deltaTimeInMs;
-
-			int idx = int(vertex.timePassed);
-
-			if (!m_APPlot.empty() && idx > 0 && idx < m_APPlot.size() && (size_t(idx) + size_t(1)) < m_APPlot.size())
-			{
-				float value1 = m_APPlot[idx];
-				float value2 = m_APPlot[(size_t(idx) + size_t(1))];
-				float t = vertex.timePassed - idx;
-
-				float lerpedValue = value1 + t * (value2 - value1);
-
-				//float valueRange01 = (lerpedValue - m_APMinValue) / dist;
-
-				vertex.actionPotential = lerpedValue;
-			}
-
-			if (vertex.timePassed >= m_APD)
-			{
-				vertex.timePassed = 0.f;
-				vertex.state = State::DI;
-				vertex.actionPotential = m_APMinValue;
-			}
-
-			break;
-		}
-		case State::DI:
-			vertex.timePassed += deltaTimeInMs;
-
-			if (vertex.timePassed >= m_DiastolicInterval.count())
-			{
-				vertex.timePassed = 0.f;
-				vertex.state = State::Waiting;
-			}
-			break;
-
-		case State::Receiving:
-			vertex.timeToTravel -= deltaTime;
-			if (vertex.timeToTravel <= 0.f)
-			{
-				vertex.state = State::Waiting;
-				PulseVertexV3(&vertex, pDeviceContext, false);
-			}
-			break;
-		}
-	}
+	UpdateVertexCluster(deltaTimeInMs, deltaTime, 0, pDeviceContext, 0, (int)m_VertexBuffer.size());
 }
 
 void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
@@ -654,6 +617,7 @@ void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D
 	{
 		m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, firstVertex, jobSize)));
 		firstVertex += int(jobSize);
+		//m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexParallell, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, nrThreads, i)));
 	}
 
 	for (size_t i = 0; i < m_TasksFinished.size(); i++)
@@ -663,29 +627,14 @@ void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D
 	m_TasksFinished.clear();
 }
 
-void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
+void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* )
 {
-	m_CudaUpdate.Update(m_VertexBuffer, m_APPlot, m_APMinValue, m_APD, float(m_DiastolicInterval.count()), deltaTimeInMs, deltaTime, dist);
-
+	m_CudaUpdate.Update(m_APMinValue, m_APD, float(m_DiastolicInterval.count()), deltaTimeInMs, deltaTime, dist, m_ConductionVelocity, UseFibres());
+	cudaDeviceSynchronize();
 	auto err = cudaGetLastError();
 	if (err != cudaSuccess) {
 		fprintf(stderr, "Failed to launch execute gpu update (error code %s)!\n",
 			cudaGetErrorString(err));
-		exit(EXIT_FAILURE);
-	}
-
-
-	for (VertexData& vertex : m_VertexBuffer)
-	{
-		if (vertex.state == State::Receiving)
-		{
-			vertex.timeToTravel -= deltaTime;
-			if (vertex.timeToTravel <= 0.f)
-			{
-				vertex.state = State::Waiting;
-				PulseVertexV3(&vertex, pDeviceContext, false);
-			}
-		}
 	}
 }
 
@@ -702,8 +651,69 @@ void Mesh::SetUpdateSystem(UpdateSystem system)
 
 void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float , ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount)
 {
-	TIME();
 	for (size_t i = firstVertex; i < firstVertex+vertexCount; i++)
+	{
+		if (i == m_VertexBuffer.size())
+		{
+			break;
+		}
+
+		switch (m_VertexBuffer[i].state)
+		{
+		case State::APD:
+		{
+			m_VertexBuffer[i].timePassed += deltaTimeInMs;
+
+			int idx = int(m_VertexBuffer[i].timePassed);
+
+			if (!m_APPlot.empty() && idx > 0 && idx < m_APPlot.size() && (size_t(idx) + size_t(1)) < m_APPlot.size())
+			{
+				float value1 = m_APPlot[idx];
+				float value2 = m_APPlot[(size_t(idx) + size_t(1))];
+				float t = m_VertexBuffer[i].timePassed - idx;
+
+				float lerpedValue = value1 + t * (value2 - value1);
+
+				//float valueRange01 = (lerpedValue - m_APMinValue) / dist;
+
+				m_VertexBuffer[i].actionPotential = lerpedValue;
+			}
+
+			if (m_VertexBuffer[i].timePassed >= m_APD)
+			{
+				m_VertexBuffer[i].actionPotential = m_APMinValue;
+				m_VertexBuffer[i].timePassed = 0.f;
+				m_VertexBuffer[i].state = State::DI;
+			}
+
+			break;
+		}
+		case State::DI:
+			m_VertexBuffer[i].timePassed += deltaTimeInMs;
+
+			if (m_VertexBuffer[i].timePassed >= m_DiastolicInterval.count())
+			{
+				m_VertexBuffer[i].timePassed = 0.f;
+				m_VertexBuffer[i].state = State::Waiting;
+			}
+			break;
+
+		case State::Receiving:
+			m_VertexBuffer[i].timeToTravel -= deltaTime;
+			if (m_VertexBuffer[i].timeToTravel <= 0.f)
+			{
+				m_VertexBuffer[i].state = State::Waiting;
+				PulseVertexV3(&m_VertexBuffer[i], pDeviceContext, false);
+			}
+			break;
+		}
+	}
+}
+
+void Mesh::UpdateVertexParallell(float deltaTimeInMs, float deltaTime, float , ID3D11DeviceContext* pDeviceContext, int nrThreads, int threadId)
+{
+	auto size = m_VertexBuffer.size(); //avoid disturbing cache by accesing m_VertexBuffer every loop
+	for (size_t i = threadId; i < size; i += nrThreads)
 	{
 		if (i == m_VertexBuffer.size())
 		{
@@ -767,6 +777,17 @@ void Mesh::PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bo
 	if (!m_VertexBuffer.empty() && index >= 0 && index < m_VertexBuffer.size())
 	{
 		PulseVertexV3(&m_VertexBuffer[index], pDeviceContext, updateVertexBuffer);
+
+		if (m_UpdateSystem == UpdateSystem::GPU)
+		{
+			m_CudaUpdate.PulseVertex(0, m_ConductionVelocity, UseFibres());
+			cudaDeviceSynchronize();
+			auto err = cudaGetLastError();
+			if (err != cudaSuccess) {
+				fprintf(stderr, "Failed to pulse gpu vertex (error code %s)!\n",
+					cudaGetErrorString(err));
+			}
+		}
 	}
 }
 
@@ -804,7 +825,7 @@ void Mesh::PulseVertexV3(VertexData* vertex, ID3D11DeviceContext* , bool )
 
 				float travelTime = distanceSqrd / conductionVelocity;
 
-				if (neighbourVertex.state == State::Waiting || (neighbourVertex.state == State::DI))
+				if (neighbourVertex.state == State::Waiting)
 				{
 					neighbourVertex.timeToTravel = travelTime;
 					neighbourVertex.state = State::Receiving;
@@ -944,7 +965,6 @@ HRESULT Mesh::CreateDirectXResources(ID3D11Device* pDevice, const std::vector<Ve
 
 void Mesh::LoadMeshFromOBJ(uint32_t )
 {
-	TIME();
 	auto timeStart = std::chrono::high_resolution_clock::now();
 
 	std::cout << "\n[Started Loading Mesh]\n";
@@ -1170,7 +1190,6 @@ void Mesh::LoadMeshFromPTS()
 
 void Mesh::LoadMeshFromBIN()
 {
-	TIME();
 	std::ifstream fileStream{ m_PathName, std::ios::in | std::ios::binary };
 	if (fileStream.is_open())
 	{
@@ -1208,7 +1227,7 @@ void Mesh::LoadMeshFromBIN()
 				size_t neighbourIndex{};
 				fileStream.read((char*)&neighbourIndex, sizeof(size_t));
 
-				m_VertexBuffer[i].pPulseData->pNeighborIndices.insert(uint32_t(neighbourIndex));
+				m_VertexBuffer[i].pPulseData->pNeighborIndices.push_back(uint32_t(neighbourIndex));
 			}
 		}
 
@@ -1455,9 +1474,12 @@ void Mesh::CalculateNeighbours(int nrOfThreads)
 			auto idx2 = m_IndexBuffer[i + 1];
 			auto idx3 = m_IndexBuffer[i + 2];
 
-			m_VertexBuffer[idx1].pPulseData->pNeighborIndices.insert({ idx2, idx3 });
-			m_VertexBuffer[idx2].pPulseData->pNeighborIndices.insert({ idx1, idx3 });
-			m_VertexBuffer[idx3].pPulseData->pNeighborIndices.insert({ idx2, idx1 });
+			m_VertexBuffer[idx1].pPulseData->pNeighborIndices.push_back(idx2);
+			m_VertexBuffer[idx1].pPulseData->pNeighborIndices.push_back(idx3);
+			m_VertexBuffer[idx2].pPulseData->pNeighborIndices.push_back(idx1);
+			m_VertexBuffer[idx2].pPulseData->pNeighborIndices.push_back(idx3);
+			m_VertexBuffer[idx3].pPulseData->pNeighborIndices.push_back(idx2);
+			m_VertexBuffer[idx3].pPulseData->pNeighborIndices.push_back(idx1);
 
 		}
 	};
@@ -1521,8 +1543,8 @@ void Mesh::CalculateInnerNeighbours()
 				float distance2 = glm::distance2(m_VertexDrawData[j].position, m_VertexDrawData[i].position);
 				if (distance2 <= maxDistance*maxDistance)
 				{
-					m_VertexBuffer[i].pPulseData->pNeighborIndices.insert(j);
-					m_VertexBuffer[j].pPulseData->pNeighborIndices.insert(i);
+					m_VertexBuffer[i].pPulseData->pNeighborIndices.push_back(j);
+					m_VertexBuffer[j].pPulseData->pNeighborIndices.push_back(i);
 				}
 			}
 
@@ -1539,6 +1561,11 @@ void Mesh::CalculateInnerNeighbours()
 
 void Mesh::UpdateVertexBuffer(ID3D11DeviceContext* pDeviceContext)
 {
+	if (m_UpdateSystem == UpdateSystem::GPU)
+	{
+		m_CudaUpdate.SetAp(m_VertexBuffer);
+	}
+
 	for (size_t i = 0; i < m_VertexBuffer.size(); i++)
 	{
 		if (m_VertexBuffer[i].actionPotential <= m_APMinValue)
@@ -1553,7 +1580,6 @@ void Mesh::UpdateVertexBuffer(ID3D11DeviceContext* pDeviceContext)
 		}
 	}
 
-	//TIME();
 	D3D11_MAPPED_SUBRESOURCE resource;
 	pDeviceContext->Map(m_pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &resource);
 	memcpy(resource.pData, m_VertexDrawData.data(), m_VertexDrawData.size() * sizeof(VertexInput));
