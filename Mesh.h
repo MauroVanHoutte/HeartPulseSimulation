@@ -59,17 +59,17 @@ public:
 	void Render(ID3D11DeviceContext* pDeviceContext, const float* worldViewProjMatrix, const float* inverseView);
 	void UpdateVertexBuffer(ID3D11DeviceContext* pDeviceContext);
 
-	void UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime);
-	void UpdateSerial(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
-	void UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
-	void UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext);
+	void UpdateMeshV3(ID3D11DeviceContext* pDeviceContext);
+	void UpdateSerial();
+	void UpdateThreaded();
+	void UpdateGPU();
 	void SetUpdateSystem(UpdateSystem system);
-	void UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount);
-	void UpdateVertexParallell(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext, int nrThreads, int threadId);
-	void PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
-	void PulseVertexV3(VertexData* vertex, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer = true);
+	void UpdateVertexCluster(int firstVertex, int vertexCount);
+	void UpdateVertexParallell(int nrThreads, int threadId);
+	void PulseVertexV3(uint32_t index, bool updateVertexBuffer = true);
+	void PulseVertexV3(VertexData* vertex, bool updateVertexBuffer = true);
 
-	void PulseMesh(ID3D11DeviceContext* pDeviceContext);
+	void PulseMesh();
 	void ClearPulse(ID3D11DeviceContext* pDeviceContext);
 	void CalculateNeighbours(int nrOfThreads = 1);
 	void CalculateInnerNeighbours();

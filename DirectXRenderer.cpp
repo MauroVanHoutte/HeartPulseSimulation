@@ -885,7 +885,7 @@ void DirectXRenderer::ImGuiDrawMeshData(Mesh* pMesh, bool& updateBuffer)
         }
         if (ImGui::Button("Pulse Mesh"))
         {
-            pMesh->PulseMesh(m_pDeviceContext);
+            pMesh->PulseMesh();
         }
 
         ImGui::InputText("BenchmarkName", &m_BenchmarkName);

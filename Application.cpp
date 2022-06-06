@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "ThreadManager.h"
 #include "BenchMarker.h"
+#include "TimeSingleton.h"
 
 #include <chrono>
 #include <iostream>
@@ -27,11 +28,12 @@ void Application::Run()
 		{
 			//Get the difference in seconds between now and the last frame
 			auto currentTime = std::chrono::high_resolution_clock::now();
-			m_DeltaTime = std::chrono::duration<float>(currentTime - timeLastFrame).count();
+			//m_DeltaTime = std::chrono::duration<float>(currentTime - timeLastFrame).count();
+			TimeSingleton::GetInstance()->Update(std::chrono::duration<float>(currentTime - timeLastFrame).count());
 
 			//Basic game loop
 			HandleInput();
-			Update(m_DeltaTime);
+			Update();
 			m_pRenderer->Render();
 
 			timeLastFrame = currentTime;
@@ -57,6 +59,7 @@ void Application::Run()
 	Cleanup();
 	ThreadManager::GetInstance()->Destroy();
 	Benchmarker::GetInstance()->Destroy();
+	TimeSingleton::GetInstance()->Destroy();
 }
 
 void Application::QuitApplication()

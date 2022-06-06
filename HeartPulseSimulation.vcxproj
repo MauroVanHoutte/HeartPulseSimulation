@@ -191,6 +191,7 @@
     <ClCompile Include="SDL2Renderer.cpp" />
     <ClCompile Include="ThreadManager.cpp" />
     <ClCompile Include="Time.cpp" />
+    <ClCompile Include="TimeSingleton.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="3rdParty\imgui-1.81\backends\imgui_impl_dx11.h" />
@@ -218,6 +219,7 @@
     <ClInclude Include="SDL2Renderer.h" />
     <ClInclude Include="ThreadManager.h" />
     <ClInclude Include="Time.h" />
+    <ClInclude Include="TimeSingleton.h" />
     <ClInclude Include="VertexInput.h" />
   </ItemGroup>
   <ItemGroup>

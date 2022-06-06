@@ -12,7 +12,7 @@ public:
 
 	void PulseVertex(int index, float conductionVelocity, bool useFibres);
 
-	void Update(float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float dist, float conductionVelocity, bool useFibres);
+	void Update(float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float conductionVelocity, bool useFibres);
 
 	void SetAp(std::vector<VertexData>& vertices);
 

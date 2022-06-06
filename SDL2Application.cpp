@@ -1,6 +1,7 @@
 #include "SDL2Application.h"
 #include "SDL2Renderer.h"
 #include "SDL.h"
+#include "TimeSingleton.h"
 
 #include <iostream>
 #include <algorithm>
@@ -225,12 +226,12 @@ void SDL2Application::HandleInput()
 	}
 }
 
-void SDL2Application::Update(float deltaTime)
+void SDL2Application::Update()
 {
 	//If the simulation is running, check if this frame the grid should update.
 	if (m_RunningSimulation)
 	{
-		m_CurrentDelay += deltaTime;
+		m_CurrentDelay += TimeSingleton::GetInstance()->DeltaTime();
 
 		if (m_CurrentDelay >= m_TickDelay)
 		{

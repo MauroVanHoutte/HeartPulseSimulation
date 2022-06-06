@@ -34,6 +34,9 @@
     <Filter Include="ThreadManager">
       <UniqueIdentifier>{fb7607f0-401c-4d54-a299-bdd967c09f10}</UniqueIdentifier>
     </Filter>
+    <Filter Include="TimeSingleton">
+      <UniqueIdentifier>{f6b586cd-4501-4d39-841f-2c74d4e8b2bd}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -104,6 +107,9 @@
     </ClCompile>
     <ClCompile Include="Mesh.cpp">
       <Filter>DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="TimeSingleton.cpp">
+      <Filter>TimeSingleton</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -184,6 +190,9 @@
     </ClInclude>
     <ClInclude Include="GpuUpdate.h">
       <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="TimeSingleton.h">
+      <Filter>TimeSingleton</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

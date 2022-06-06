@@ -1,5 +1,6 @@
 #include "DirectXApplication.h"
 #include "DirectXRenderer.h"
+#include "TimeSingleton.h"
 
 #include "SDL.h"
 #include "Time.h"
@@ -50,41 +51,41 @@ void DirectXApplication::HandleInput()
 
 	if (state[SDL_SCANCODE_W])
 	{
-        glm::fvec3 forwardVector{ pCamera->GetForwardVector() * pCamera->GetMovementSpeed() * m_DeltaTime };
+        glm::fvec3 forwardVector{ pCamera->GetForwardVector() * pCamera->GetMovementSpeed() * TimeSingleton::GetInstance()->DeltaTime()};
         pCamera->Translate(forwardVector);
 	}
     if (state[SDL_SCANCODE_S])
     {
-        glm::fvec3 forwardVector{ pCamera->GetForwardVector() * pCamera->GetMovementSpeed() * m_DeltaTime };
+        glm::fvec3 forwardVector{ pCamera->GetForwardVector() * pCamera->GetMovementSpeed() * TimeSingleton::GetInstance()->DeltaTime() };
         pCamera->Translate(-forwardVector);
     }
     if (state[SDL_SCANCODE_A])
     {
-        glm::fvec3 rightVector{ pCamera->GetRightVector() * pCamera->GetMovementSpeed() * m_DeltaTime };
+        glm::fvec3 rightVector{ pCamera->GetRightVector() * pCamera->GetMovementSpeed() * TimeSingleton::GetInstance()->DeltaTime() };
         pCamera->Translate(-rightVector);
     }
     if (state[SDL_SCANCODE_D])
     {
-        glm::fvec3 rightVector{ pCamera->GetRightVector() * pCamera->GetMovementSpeed() * m_DeltaTime };
+        glm::fvec3 rightVector{ pCamera->GetRightVector() * pCamera->GetMovementSpeed() * TimeSingleton::GetInstance()->DeltaTime() };
         pCamera->Translate(rightVector);
     }
     if (state[SDL_SCANCODE_E])
     {
-        pCamera->RotateYaw(pCamera->GetRotationSpeed() * m_DeltaTime);
+        pCamera->RotateYaw(pCamera->GetRotationSpeed() * TimeSingleton::GetInstance()->DeltaTime());
     }
 
     if (state[SDL_SCANCODE_Q])
     {
-        pCamera->RotateYaw(-pCamera->GetRotationSpeed() * m_DeltaTime);
+        pCamera->RotateYaw(-pCamera->GetRotationSpeed() * TimeSingleton::GetInstance()->DeltaTime());
     }
     if (state[SDL_SCANCODE_UP])
     {
-        glm::fvec3 upVector{ glm::fvec3{0, 1, 0} * pCamera->GetMovementSpeed() * m_DeltaTime };
+        glm::fvec3 upVector{ glm::fvec3{0, 1, 0} * pCamera->GetMovementSpeed() * TimeSingleton::GetInstance()->DeltaTime() };
         pCamera->Translate(upVector);
     }
     if (state[SDL_SCANCODE_DOWN])
     {
-        glm::fvec3 upVector{ glm::fvec3{0, 1, 0} *pCamera->GetMovementSpeed() * m_DeltaTime };
+        glm::fvec3 upVector{ glm::fvec3{0, 1, 0} *pCamera->GetMovementSpeed() * TimeSingleton::GetInstance()->DeltaTime() };
         pCamera->Translate(-upVector);
     }
 
@@ -108,7 +109,7 @@ void DirectXApplication::HandleInput()
     }
 }
 
-void DirectXApplication::Update(float deltaTime)
+void DirectXApplication::Update()
 {
     if (m_pDirectXRenderer->IsRunningTest() && !m_pDirectXRenderer->GetMeshes().empty())
     {
@@ -119,7 +120,7 @@ void DirectXApplication::Update(float deltaTime)
             VertexData& vertex = pMesh->GetVertexBufferReference()[0];
             if (vertex.state == State::Waiting)
             {
-                pMesh->PulseVertexV3(&vertex, m_pDirectXRenderer->GetDeviceContext(), false);
+                pMesh->PulseVertexV3(&vertex, false);
                 m_pDirectXRenderer->IncreasePulses();
             }
         }
@@ -131,7 +132,7 @@ void DirectXApplication::Update(float deltaTime)
     {
 	    if (mesh)
 	    {
-            mesh->UpdateMeshV3(m_pDirectXRenderer->GetDeviceContext(), deltaTime);
+            mesh->UpdateMeshV3(m_pDirectXRenderer->GetDeviceContext());
 	    }
     }
 }

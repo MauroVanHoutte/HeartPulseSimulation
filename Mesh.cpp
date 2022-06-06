@@ -12,6 +12,7 @@
 #include "ThreadManager.h"
 #include "BenchMarker.h"
 #include "GpuUpdate.h"
+#include "TimeSingleton.h"
 
 //External Headers
 #pragma warning(push)
@@ -564,11 +565,11 @@ void Mesh::LoadCachedFibres()
 	}
 }
 
-void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
+void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext)
 {
 	if (m_IsPulsing)
 	{
-		m_PulseCounter += deltaTime;
+		m_PulseCounter += TimeSingleton::GetInstance()->DeltaTime();
 		if (m_PulseCounter > 1/m_PulseRate)
 		{
 			m_PulseCounter -= 1 / m_PulseRate;
@@ -576,21 +577,18 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 		}
 	}
 
-	float dist = (m_APMaxValue - m_APMinValue);
-	float deltaTimeInMs = deltaTime * 1000.f;
-
 	auto startTime = std::chrono::high_resolution_clock::now();
 
 	switch (m_UpdateSystem)
 	{
 	case UpdateSystem::Serial:
-		UpdateSerial(deltaTimeInMs, deltaTime, dist, pDeviceContext);
+		UpdateSerial();
 		break;
 	case UpdateSystem::Multithreaded:
-		UpdateThreaded(deltaTimeInMs, deltaTime, dist, pDeviceContext);
+		UpdateThreaded();
 		break;
 	case UpdateSystem::GPU:
-		UpdateGPU(deltaTimeInMs, deltaTime, dist, pDeviceContext);
+		UpdateGPU();
 		break;
 	}
 
@@ -601,12 +599,12 @@ void Mesh::UpdateMeshV3(ID3D11DeviceContext* pDeviceContext, float deltaTime)
 	UpdateVertexBuffer(pDeviceContext);
 }
 
-void Mesh::UpdateSerial(float deltaTimeInMs, float deltaTime, float , ID3D11DeviceContext* pDeviceContext)
+void Mesh::UpdateSerial()
 {
-	UpdateVertexCluster(deltaTimeInMs, deltaTime, 0, pDeviceContext, 0, (int)m_VertexBuffer.size());
+	UpdateVertexCluster( 0, (int)m_VertexBuffer.size());
 }
 
-void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* pDeviceContext)
+void Mesh::UpdateThreaded()
 {
 	int nrThreads = int(ThreadManager::GetInstance()->GetNrThreads());
 	int jobSize = int(ceil(m_VertexBuffer.size() / float(nrThreads)));
@@ -615,7 +613,7 @@ void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D
 
 	for (int i = 0; i < nrThreads; i++)
 	{
-		m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, firstVertex, jobSize)));
+		m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, firstVertex, jobSize)));
 		firstVertex += int(jobSize);
 		//m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexParallell, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, nrThreads, i)));
 	}
@@ -627,9 +625,9 @@ void Mesh::UpdateThreaded(float deltaTimeInMs, float deltaTime, float dist, ID3D
 	m_TasksFinished.clear();
 }
 
-void Mesh::UpdateGPU(float deltaTimeInMs, float deltaTime, float dist, ID3D11DeviceContext* )
+void Mesh::UpdateGPU()
 {
-	m_CudaUpdate.Update(m_APMinValue, m_APD, float(m_DiastolicInterval.count()), deltaTimeInMs, deltaTime, dist, m_ConductionVelocity, UseFibres());
+	m_CudaUpdate.Update(m_APMinValue, m_APD, float(m_DiastolicInterval.count()), TimeSingleton::GetInstance()->DeltaTimeInMs(), TimeSingleton::GetInstance()->DeltaTime(), m_ConductionVelocity, UseFibres());
 	cudaDeviceSynchronize();
 	auto err = cudaGetLastError();
 	if (err != cudaSuccess) {
@@ -649,7 +647,7 @@ void Mesh::SetUpdateSystem(UpdateSystem system)
 //
 //}
 
-void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float , ID3D11DeviceContext* pDeviceContext, int firstVertex, int vertexCount)
+void Mesh::UpdateVertexCluster( int firstVertex, int vertexCount)
 {
 	for (size_t i = firstVertex; i < firstVertex+vertexCount; i++)
 	{
@@ -662,7 +660,7 @@ void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float , ID3
 		{
 		case State::APD:
 		{
-			m_VertexBuffer[i].timePassed += deltaTimeInMs;
+			m_VertexBuffer[i].timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
 
 			int idx = int(m_VertexBuffer[i].timePassed);
 
@@ -689,7 +687,7 @@ void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float , ID3
 			break;
 		}
 		case State::DI:
-			m_VertexBuffer[i].timePassed += deltaTimeInMs;
+			m_VertexBuffer[i].timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
 
 			if (m_VertexBuffer[i].timePassed >= m_DiastolicInterval.count())
 			{
@@ -699,18 +697,18 @@ void Mesh::UpdateVertexCluster(float deltaTimeInMs, float deltaTime, float , ID3
 			break;
 
 		case State::Receiving:
-			m_VertexBuffer[i].timeToTravel -= deltaTime;
-			if (m_VertexBuffer[i].timeToTravel <= 0.f)
+			m_VertexBuffer[i].timePassed -= TimeSingleton::GetInstance()->DeltaTime();
+			if (m_VertexBuffer[i].timePassed <= 0.f)
 			{
 				m_VertexBuffer[i].state = State::Waiting;
-				PulseVertexV3(&m_VertexBuffer[i], pDeviceContext, false);
+				PulseVertexV3(&m_VertexBuffer[i], false);
 			}
 			break;
 		}
 	}
 }
 
-void Mesh::UpdateVertexParallell(float deltaTimeInMs, float deltaTime, float , ID3D11DeviceContext* pDeviceContext, int nrThreads, int threadId)
+void Mesh::UpdateVertexParallell( int nrThreads, int threadId)
 {
 	auto size = m_VertexBuffer.size(); //avoid disturbing cache by accesing m_VertexBuffer every loop
 	for (size_t i = threadId; i < size; i += nrThreads)
@@ -724,7 +722,7 @@ void Mesh::UpdateVertexParallell(float deltaTimeInMs, float deltaTime, float , I
 		{
 		case State::APD:
 		{
-			m_VertexBuffer[i].timePassed += deltaTimeInMs;
+			m_VertexBuffer[i].timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
 
 			int idx = int(m_VertexBuffer[i].timePassed);
 
@@ -751,7 +749,7 @@ void Mesh::UpdateVertexParallell(float deltaTimeInMs, float deltaTime, float , I
 			break;
 		}
 		case State::DI:
-			m_VertexBuffer[i].timePassed += deltaTimeInMs;
+			m_VertexBuffer[i].timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
 
 			if (m_VertexBuffer[i].timePassed >= m_DiastolicInterval.count())
 			{
@@ -761,22 +759,22 @@ void Mesh::UpdateVertexParallell(float deltaTimeInMs, float deltaTime, float , I
 			break;
 
 		case State::Receiving:
-			m_VertexBuffer[i].timeToTravel -= deltaTime;
-			if (m_VertexBuffer[i].timeToTravel <= 0.f)
+			m_VertexBuffer[i].timePassed -= TimeSingleton::GetInstance()->DeltaTime();
+			if (m_VertexBuffer[i].timePassed <= 0.f)
 			{
 				m_VertexBuffer[i].state = State::Waiting;
-				PulseVertexV3(&m_VertexBuffer[i], pDeviceContext, false);
+				PulseVertexV3(&m_VertexBuffer[i], false);
 			}
 			break;
 		}
 	}
 }
 
-void Mesh::PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bool updateVertexBuffer)
+void Mesh::PulseVertexV3(uint32_t index, bool updateVertexBuffer)
 {
 	if (!m_VertexBuffer.empty() && index >= 0 && index < m_VertexBuffer.size())
 	{
-		PulseVertexV3(&m_VertexBuffer[index], pDeviceContext, updateVertexBuffer);
+		PulseVertexV3(&m_VertexBuffer[index], updateVertexBuffer);
 
 		if (m_UpdateSystem == UpdateSystem::GPU)
 		{
@@ -791,14 +789,15 @@ void Mesh::PulseVertexV3(uint32_t index, ID3D11DeviceContext* pDeviceContext, bo
 	}
 }
 
-void Mesh::PulseVertexV3(VertexData* vertex, ID3D11DeviceContext* , bool )
+void Mesh::PulseVertexV3(VertexData* vertex, bool )
 {
 	if (vertex)
 	{
-		if (vertex->state == State::Waiting || (vertex->actionPotential < m_APThreshold && vertex->state == State::DI))
+		if (vertex->state == State::Waiting || vertex->state == State::DI)
 		{
 			vertex->actionPotential = m_APPlot[0];
 			vertex->state = State::APD;
+			vertex->timePassed = 0;
 
 			for (uint32_t index : vertex->pPulseData->pNeighborIndices)
 			{
@@ -827,7 +826,7 @@ void Mesh::PulseVertexV3(VertexData* vertex, ID3D11DeviceContext* , bool )
 
 				if (neighbourVertex.state == State::Waiting)
 				{
-					neighbourVertex.timeToTravel = travelTime;
+					neighbourVertex.timePassed = travelTime;
 					neighbourVertex.state = State::Receiving;
 				}
 			}
@@ -836,11 +835,11 @@ void Mesh::PulseVertexV3(VertexData* vertex, ID3D11DeviceContext* , bool )
 
 }
 
-void Mesh::PulseMesh(ID3D11DeviceContext* pDeviceContext)
+void Mesh::PulseMesh()
 {
 	for (int i{}; i < m_VertexBuffer.size(); i++)
 	{
-		PulseVertexV3(i, pDeviceContext, false);
+		PulseVertexV3(i, false);
 	}
 }
 

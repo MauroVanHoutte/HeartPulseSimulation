@@ -24,6 +24,7 @@ __device__ float powD(float base, int exp)
 	{
 		result *= base;
 	}
+	return result;
 }
 
 __device__ float root(float n)
@@ -57,6 +58,7 @@ __device__ void PulseVertex(VertexData& vertex, VertexData* vertices, uint32_t n
 	{
 		vertex.actionPotential = apPlot[0];
 		vertex.state = State::APD;
+		vertex.timePassed = 0;
 
 		for (size_t i = 0; i < neighborCount[index]; i++)
 		{
@@ -84,14 +86,14 @@ __device__ void PulseVertex(VertexData& vertex, VertexData* vertices, uint32_t n
 
 			if (neighbourVertex.state == State::Waiting)
 			{
-				neighbourVertex.timeToTravel = travelTime;
+				neighbourVertex.timePassed = travelTime;
 				neighbourVertex.state = State::Receiving;
 			}
 		}
 	}
 }
 
-__global__ void UpdateNodes(VertexData* vertices, uint32_t nrOfVerts, PulseData* pulseData, uint32_t** neighbors, uint32_t* neighborCount, float* ap , float* apPlot, uint32_t apPlotSize, float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float dist, float conductionVelocity, bool useFibres)
+__global__ void UpdateNodes(VertexData* vertices, uint32_t nrOfVerts, PulseData* pulseData, uint32_t** neighbors, uint32_t* neighborCount, float* ap , float* apPlot, uint32_t apPlotSize, float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float conductionVelocity, bool useFibres)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i >= nrOfVerts)
@@ -116,8 +118,6 @@ __global__ void UpdateNodes(VertexData* vertices, uint32_t nrOfVerts, PulseData*
 
 			float lerpedValue = value1 + t * (value2 - value1);
 
-			float valueRange01 = (lerpedValue - apMinValue) / dist;
-
 			ap[i] = lerpedValue;
 		}
 
@@ -139,8 +139,8 @@ __global__ void UpdateNodes(VertexData* vertices, uint32_t nrOfVerts, PulseData*
 		}
 		break;
 	case 1:
-		vertex.timeToTravel -= deltaTime;
-		if (vertex.timeToTravel <= 0.f)
+		vertex.timePassed -= deltaTime;
+		if (vertex.timePassed <= 0.f)
 		{
 			vertex.state = (State)0;
 			PulseVertex(vertex, vertices, nrOfVerts, pulseData, neighbors, neighborCount, apPlot, conductionVelocity, useFibres, i);
@@ -228,22 +228,66 @@ void CudaUpdate::Setup(const std::vector<VertexData>& vertices, std::vector<floa
 
 __global__ void PulseGPUVertex(VertexData* vertices, uint32_t vertexCount, PulseData* pulseData, uint32_t** neighbors, uint32_t* neighborCount, float* apPlot, float conductionVelocity, bool useFibres, int index)
 {
-	PulseVertex(vertices[index], vertices, vertexCount, pulseData, neighbors, neighborCount, apPlot, conductionVelocity, useFibres, index);
+	VertexData& vertex = vertices[index];
+	if (vertex.state == State::Waiting || /* (vertex.actionPotential < m_APThreshold && */ vertex.state == State::DI)
+	{
+		vertex.actionPotential = apPlot[0];
+		vertex.state = State::APD;
+		vertex.timePassed = 0;
+
+		for (size_t i = 0; i < neighborCount[index]; i++)
+		{
+			VertexData& neighbourVertex = vertices[neighbors[index][i]];
+
+			//Potential problem with fibres. c0 is in m/s while the distance is most likely not in meters.
+				//This is likely the cause of it.
+			float distanceSqrd = sqrDistance(pulseData[index].position, pulseData[neighbors[index][i]].position);
+
+			if (useFibres)
+			{
+				float d1 = 1; // parallel with fibre
+				float d2 = d1 / 5; // perpendiculat with fibre
+				float c0 = 0.6f; // m/s
+
+				glm::fvec3 pulseDirection = pulseData[neighbors[index][i]].position - pulseData[index].position;
+				float cosAngle = dot(pulseData[index].fibreDirection, pulseDirection);
+
+				float c = c0 * root(d2 + (d1 - d2) * powD(cosAngle, 2));
+				conductionVelocity = c * 100;
+				//std::cout << c << "\n";
+			}
+
+			float travelTime = distanceSqrd / conductionVelocity;
+
+			if (neighbourVertex.state == State::Waiting)
+			{
+				neighbourVertex.timePassed = travelTime;
+				neighbourVertex.state = State::Receiving;
+			}
+		}
+	}
 }
 
 void CudaUpdate::PulseVertex(int index, float conductionVelocity, bool useFibres)
 {
+	//VertexData vertex;
+	//delete vertex.pPulseData;				//bad but ye :/
+	//cudaMemcpy(&vertex, &m_DeviceVerts[index], sizeof(VertexData), cudaMemcpyDeviceToHost);
+	//vertex.state = State::Receiving;
+	//vertex.timePassed = 0;
+	//cudaMemcpy(&m_DeviceVerts[index], &vertex, sizeof(VertexData), cudaMemcpyHostToDevice);
+	//vertex.pPulseData = nullptr;
 	PulseGPUVertex <<<1, 1>>>(m_DeviceVerts, m_VertexCount, m_DevicePulseData, m_DeviceNeighbors, m_DeviceNeighborCount, m_DeviceApPlot, conductionVelocity, useFibres, index);
 }
 
-void CudaUpdate::Update(float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float dist, float conductionVelocity, bool useFibres)
+void CudaUpdate::Update(float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float conductionVelocity, bool useFibres)
 {
 
 	int threadsPerBlock{1024};
 	int numBlocks{ (int(m_VertexCount) + threadsPerBlock - 1) / threadsPerBlock };
 
 
-	UpdateNodes <<<numBlocks, threadsPerBlock>>>(m_DeviceVerts, m_VertexCount, m_DevicePulseData, m_DeviceNeighbors, m_DeviceNeighborCount, m_DeviceAp, m_DeviceApPlot, m_ApPlotSize, apMinValue, apd, diastolicInterval, deltaTimeInMs, deltaTime, dist, conductionVelocity, useFibres);
+	UpdateNodes <<<numBlocks, threadsPerBlock>>>(m_DeviceVerts, m_VertexCount, m_DevicePulseData, m_DeviceNeighbors, m_DeviceNeighborCount, m_DeviceAp, m_DeviceApPlot, m_ApPlotSize, apMinValue, apd, diastolicInterval, deltaTimeInMs, deltaTime, conductionVelocity, useFibres);
 
 }
 
