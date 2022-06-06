@@ -270,14 +270,14 @@ __global__ void PulseGPUVertex(VertexData* vertices, uint32_t vertexCount, Pulse
 
 void CudaUpdate::PulseVertex(int index, float conductionVelocity, bool useFibres)
 {
-	//VertexData vertex;
-	//delete vertex.pPulseData;				//bad but ye :/
-	//cudaMemcpy(&vertex, &m_DeviceVerts[index], sizeof(VertexData), cudaMemcpyDeviceToHost);
-	//vertex.state = State::Receiving;
-	//vertex.timePassed = 0;
-	//cudaMemcpy(&m_DeviceVerts[index], &vertex, sizeof(VertexData), cudaMemcpyHostToDevice);
-	//vertex.pPulseData = nullptr;
-	PulseGPUVertex <<<1, 1>>>(m_DeviceVerts, m_VertexCount, m_DevicePulseData, m_DeviceNeighbors, m_DeviceNeighborCount, m_DeviceApPlot, conductionVelocity, useFibres, index);
+	VertexData vertex;
+	delete vertex.pPulseData;				//bad but ye :/
+	cudaMemcpy(&vertex, &m_DeviceVerts[index], sizeof(VertexData), cudaMemcpyDeviceToHost);
+	vertex.state = State::Receiving;
+	vertex.timePassed = 0;
+	cudaMemcpy(&m_DeviceVerts[index], &vertex, sizeof(VertexData), cudaMemcpyHostToDevice);
+	vertex.pPulseData = nullptr;
+	//PulseGPUVertex <<<1, 1>>>(m_DeviceVerts, m_VertexCount, m_DevicePulseData, m_DeviceNeighbors, m_DeviceNeighborCount, m_DeviceApPlot, conductionVelocity, useFibres, index);
 }
 
 void CudaUpdate::Update(float apMinValue, float apd, float diastolicInterval, float deltaTimeInMs, float deltaTime, float conductionVelocity, bool useFibres)
