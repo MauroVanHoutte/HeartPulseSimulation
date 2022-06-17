@@ -133,6 +133,7 @@
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)3rdParty\glfw-3.3.4\include;C:\Program Files (x86)\Visual Leak Detector\include;%(AdditionalIncludeDirectories);$(SolutionDir)3rdParty\glm;$(SolutionDir)3rdParty\SDL2-2.0.16\include;$(SolutionDir)3rdParty\dx11effects\include;$(SolutionDir)3rdParty\imgui-1.81</AdditionalIncludeDirectories>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

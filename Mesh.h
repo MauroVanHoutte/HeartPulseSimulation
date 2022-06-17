@@ -171,7 +171,7 @@ private:
 
 	//Multithreading
 	std::vector<std::future<void>> m_TasksFinished{};
-	UpdateSystem m_UpdateSystem = UpdateSystem::Serial;
+	UpdateSystem m_UpdateSystem = UpdateSystem::Multithreaded;
 	CudaUpdate m_CudaUpdate{};
 
 	//Constant pulsing

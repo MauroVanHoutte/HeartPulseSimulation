@@ -59,10 +59,10 @@ struct PulseData
 	};
 
 	std::vector<uint32_t> pNeighborIndices{};		//indices of connected cells
-	uint32_t* pNeighborIndicesRaw;					//needed for cuda update
-	uint32_t neighborIndicesSize;
 	glm::fvec3 fibreDirection{};				//The direction of the heart fibre at this point
 	glm::fvec3 position{};						//World position
+	uint32_t* pNeighborIndicesRaw;					//needed for cuda update
+	uint32_t neighborIndicesSize;
 };
 
 struct VertexData

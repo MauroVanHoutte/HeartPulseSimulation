@@ -1,4 +1,5 @@
 #include "ThreadManager.h"
+#include <windows.h>
 
 ThreadManager* ThreadManager::m_Instance = nullptr;
 
@@ -63,7 +64,22 @@ ThreadManager::ThreadManager()
     m_Threads.reserve(nrThreads);
     for (size_t i = 0; i < nrThreads; i++)
     {
-        m_Threads.push_back(std::thread(std::bind(&ThreadManager::ThreadLoop, this))); //initiliasi threads with threadloop function
+        m_Threads.push_back(std::thread(std::bind(&ThreadManager::ThreadLoop, this))); //initialising threads with threadloop function
+
+        DWORD_PTR threadMask{ 0 };
+        threadMask |= 1ULL << (i);
+        DWORD_PTR rv = SetThreadAffinityMask(m_Threads[i].native_handle(), threadMask);
+        if (rv == 0)
+        {
+            auto error = GetLastError();
+            printf((char*)&error);
+        }
+        rv = SetThreadPriority(m_Threads[i].native_handle(), THREAD_PRIORITY_ABOVE_NORMAL);
+        if (rv == 0)
+        {
+            auto error = GetLastError();
+            printf((char*)&error);
+        }
     }
 }
 

@@ -96,6 +96,8 @@ Mesh::Mesh(ID3D11Device* pDevice, const std::string& filepath, bool skipOptimiza
 		vertex.pPulseData->neighborIndicesSize = (uint32_t)vertex.pPulseData->pNeighborIndices.size();
 	}
 
+	std::cout << "VertexData size : " << sizeof(VertexData) << std::endl;
+	std::cout << "PulseData size : " << sizeof(PulseData) << std::endl;
 	std::cout << "Total vertex buffer size: " << m_VertexBuffer.size() * sizeof(VertexData) << std::endl;
 
 	m_CudaUpdate.Setup(m_VertexBuffer, m_APPlot);
@@ -613,7 +615,7 @@ void Mesh::UpdateThreaded()
 
 	for (int i = 0; i < nrThreads; i++)
 	{
-		m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, firstVertex, jobSize)));
+		m_TasksFinished.emplace_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexCluster, this, firstVertex, jobSize)));
 		firstVertex += int(jobSize);
 		//m_TasksFinished.push_back(ThreadManager::GetInstance()->AddJobFunction(std::bind(&Mesh::UpdateVertexParallell, this, deltaTimeInMs, deltaTime, dist, pDeviceContext, nrThreads, i)));
 	}
@@ -651,59 +653,74 @@ void Mesh::UpdateVertexCluster( int firstVertex, int vertexCount)
 {
 	for (size_t i = firstVertex; i < firstVertex+vertexCount; i++)
 	{
+
 		if (i == m_VertexBuffer.size())
 		{
 			break;
 		}
 
-		switch (m_VertexBuffer[i].state)
+		VertexData& vertex = m_VertexBuffer[i];
+
+
+		switch (vertex.state)
 		{
 		case State::APD:
 		{
-			m_VertexBuffer[i].timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
+			vertex.timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
 
-			int idx = int(m_VertexBuffer[i].timePassed);
+			int idx = int(vertex.timePassed);
 
 			if (!m_APPlot.empty() && idx > 0 && idx < m_APPlot.size() && (size_t(idx) + size_t(1)) < m_APPlot.size())
 			{
 				float value1 = m_APPlot[idx];
 				float value2 = m_APPlot[(size_t(idx) + size_t(1))];
-				float t = m_VertexBuffer[i].timePassed - idx;
+				float t = vertex.timePassed - idx;
 
 				float lerpedValue = value1 + t * (value2 - value1);
 
 				//float valueRange01 = (lerpedValue - m_APMinValue) / dist;
 
-				m_VertexBuffer[i].actionPotential = lerpedValue;
+				vertex.actionPotential = lerpedValue;
 			}
 
-			if (m_VertexBuffer[i].timePassed >= m_APD)
+			if (vertex.timePassed >= m_APD)
 			{
-				m_VertexBuffer[i].actionPotential = m_APMinValue;
-				m_VertexBuffer[i].timePassed = 0.f;
-				m_VertexBuffer[i].state = State::DI;
+				vertex.actionPotential = m_APMinValue;
+				vertex.timePassed = 0.f;
+				vertex.state = State::DI;
 			}
 
 			break;
 		}
 		case State::DI:
-			m_VertexBuffer[i].timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
+			vertex.timePassed += TimeSingleton::GetInstance()->DeltaTimeInMs();
 
-			if (m_VertexBuffer[i].timePassed >= m_DiastolicInterval.count())
+			if (vertex.timePassed >= m_DiastolicInterval.count())
 			{
-				m_VertexBuffer[i].timePassed = 0.f;
-				m_VertexBuffer[i].state = State::Waiting;
+				vertex.timePassed = 0.f;
+				vertex.state = State::Waiting;
 			}
 			break;
 
 		case State::Receiving:
-			m_VertexBuffer[i].timePassed -= TimeSingleton::GetInstance()->DeltaTime();
-			if (m_VertexBuffer[i].timePassed <= 0.f)
+			vertex.timePassed -= TimeSingleton::GetInstance()->DeltaTime();
+			if (vertex.timePassed <= 0.f)
 			{
-				m_VertexBuffer[i].state = State::Waiting;
-				PulseVertexV3(&m_VertexBuffer[i], false);
+				vertex.state = State::Waiting;
+				PulseVertexV3(&vertex, false);
 			}
 			break;
+		}
+
+		if (m_VertexBuffer[i].actionPotential <= m_APMinValue)
+		{
+			m_VertexDrawData[i].apVisualization = 0;
+		}
+		else
+		{
+			float dist = m_APMaxValue - m_APMinValue;
+
+			m_VertexDrawData[i].apVisualization = (m_VertexBuffer[i].actionPotential - m_APMinValue) / dist;
 		}
 	}
 }
@@ -1563,25 +1580,24 @@ void Mesh::UpdateVertexBuffer(ID3D11DeviceContext* pDeviceContext)
 	if (m_UpdateSystem == UpdateSystem::GPU)
 	{
 		m_CudaUpdate.SetAp(m_VertexBuffer);
-	}
 
-	for (size_t i = 0; i < m_VertexBuffer.size(); i++)
-	{
-		if (m_VertexBuffer[i].actionPotential <= m_APMinValue)
+		for (size_t i = 0; i < m_VertexBuffer.size(); i++)
 		{
-			m_VertexDrawData[i].apVisualization = 0;
-		}
-		else
-		{
-			float dist = m_APMaxValue - m_APMinValue;
-
-			m_VertexDrawData[i].apVisualization = (m_VertexBuffer[i].actionPotential - m_APMinValue) / dist;
+			if (m_VertexBuffer[i].actionPotential <= m_APMinValue)
+			{
+				m_VertexDrawData[i].apVisualization = 0;
+			}
+			else
+			{
+				float dist = m_APMaxValue - m_APMinValue;
+				m_VertexDrawData[i].apVisualization = (m_VertexBuffer[i].actionPotential - m_APMinValue) / dist;
+			}
 		}
 	}
 
 	D3D11_MAPPED_SUBRESOURCE resource;
 	pDeviceContext->Map(m_pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &resource);
-	memcpy(resource.pData, m_VertexDrawData.data(), m_VertexDrawData.size() * sizeof(VertexInput));
+	memcpy(resource.pData, m_VertexDrawData.data(), m_VertexDrawData.size() * sizeof(VertexInput)); // bad bad bad 
 	pDeviceContext->Unmap(m_pVertexBuffer, 0);
 }
 
